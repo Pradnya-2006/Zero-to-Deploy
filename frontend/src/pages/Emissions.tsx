@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   BarChart,
   Bar,
@@ -18,39 +18,75 @@ import { Zap, Car, Utensils, Droplets, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-const categoryData = [
-  { name: 'Electricity', value: 1200, icon: Zap, color: 'hsl(38, 92%, 50%)' },
-  { name: 'Heating', value: 600, icon: Droplets, color: 'hsl(200, 80%, 50%)' },
-  { name: 'Transport', value: 1400, icon: Car, color: 'hsl(160, 84%, 39%)' },
-  { name: 'Food', value: 500, icon: Utensils, color: 'hsl(0, 70%, 50%)' },
-  { name: 'Shopping', value: 300, icon: ShoppingBag, color: 'hsl(280, 60%, 50%)' },
-];
-
-const monthlyData = [
-  { month: 'Jan', current: 380, previous: 420 },
-  { month: 'Feb', current: 350, previous: 400 },
-  { month: 'Mar', current: 340, previous: 390 },
-  { month: 'Apr', current: 320, previous: 385 },
-  { month: 'May', current: 310, previous: 370 },
-  { month: 'Jun', current: 330, previous: 365 },
-  { month: 'Jul', current: 290, previous: 350 },
-  { month: 'Aug', current: 280, previous: 340 },
-  { month: 'Sep', current: 270, previous: 330 },
-  { month: 'Oct', current: 260, previous: 320 },
-  { month: 'Nov', current: 250, previous: 310 },
-  { month: 'Dec', current: 240, previous: 300 },
-];
-
-const yearlyComparison = [
-  { year: '2022', emissions: 4800 },
-  { year: '2023', emissions: 4200 },
-  { year: '2024', emissions: 4000 },
-];
+// initial empty shapes; actual values come from backend (/api/results/latest and /api/results/history)
 
 export default function Emissions() {
   const [view, setView] = useState<'monthly' | 'yearly'>('monthly');
+  const [categoryData, setCategoryData] = useState<any[] | undefined>(undefined);
+  const [monthlyData, setMonthlyData] = useState<any[] | undefined>(undefined);
+  const [yearlyComparison, setYearlyComparison] = useState<any[] | undefined>(undefined);
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-  const totalEmissions = categoryData.reduce((sum, cat) => sum + cat.value, 0);
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const headers: Record<string,string> = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        // latest result
+        const latestRes = await fetch(`${API_URL}/api/results/latest`, { headers });
+        const latestJson = await latestRes.json();
+        const latest = latestJson?.found && latestJson?.result ? latestJson.result : null;
+
+        // history
+        const historyRes = await fetch(`${API_URL}/api/results/history`, { headers });
+        const historyJson = historyRes.ok ? await historyRes.json() : null;
+
+        // map category data (match visuals used elsewhere)
+        if (latest && latest.emissions) {
+          const cat = [
+            { name: 'Electricity', value: Number(latest.emissions.electricity || 0), icon: Zap, color: 'hsl(38, 92%, 50%)' },
+            { name: 'Transport', value: Number(latest.emissions.transport || 0), icon: Car, color: 'hsl(160, 84%, 39%)' },
+            { name: 'Lifestyle', value: Number(latest.emissions.lifestyle || 0), icon: Utensils, color: 'hsl(280, 60%, 50%)' },
+          ];
+          setCategoryData(cat);
+        } else {
+          setCategoryData(undefined);
+        }
+
+        // monthly data: use history.monthly if available else derive from latest
+        if (historyJson?.monthly && Array.isArray(historyJson.monthly) && historyJson.monthly.length) {
+          const monthsNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+          const dataPoints = historyJson.monthly.map((m: any) => ({
+            month: monthsNames[(m.month - 1) % 12],
+            current: Math.round(m.total || 0),
+            previous: Math.round(m.previousTotal || 0) || 0,
+          }));
+          setMonthlyData(dataPoints);
+        } else if (latest && latest.emissions) {
+          setMonthlyData(Array.from({ length: 12 }).map((_, i) => ({ month: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i], current: Math.round((latest.emissions.total || 0) / 12), previous: 0 })));
+        } else {
+          setMonthlyData(undefined);
+        }
+
+        // yearly comparison
+        if (historyJson?.yearly && Array.isArray(historyJson.yearly) && historyJson.yearly.length) {
+          setYearlyComparison(historyJson.yearly.map((y: any) => ({ year: String(y.year), emissions: Math.round(y.total || 0) })));
+        } else if (latest && latest.emissions) {
+          setYearlyComparison([{ year: String(new Date().getFullYear()), emissions: Math.round(latest.emissions.total || 0) }]);
+        } else {
+          setYearlyComparison(undefined);
+        }
+      } catch (err) {
+        console.error('Failed to fetch emissions data', err);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const totalEmissions = categoryData ? categoryData.reduce((sum, cat) => sum + (Number(cat.value) || 0), 0) : 0;
 
   return (
     <div className="page-container">
@@ -80,10 +116,10 @@ export default function Emissions() {
 
       {/* Category Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {categoryData.map((category) => {
+        {(categoryData ?? [{ name: 'Electricity', value: 0, icon: Zap, color: 'hsl(38, 92%, 50%)' }, { name: 'Transport', value: 0, icon: Car, color: 'hsl(160, 84%, 39%)' }, { name: 'Lifestyle', value: 0, icon: Utensils, color: 'hsl(280, 60%, 50%)' }]).map((category) => {
           const Icon = category.icon;
-          const percentage = Math.round((category.value / totalEmissions) * 100);
-          
+          const percentage = totalEmissions ? Math.round((Number(category.value || 0) / totalEmissions) * 100) : 0;
+
           return (
             <div
               key={category.name}
@@ -96,7 +132,8 @@ export default function Emissions() {
                 <Icon className="w-6 h-6" style={{ color: category.color }} />
               </div>
               <p className="text-2xl font-bold text-foreground mb-1">
-                {category.value.toLocaleString()}
+                {Number(category.value || 0).toLocaleString()
+                }
               </p>
               <p className="text-sm text-muted-foreground mb-2">{category.name}</p>
               <p className="text-xs font-medium" style={{ color: category.color }}>
@@ -114,7 +151,7 @@ export default function Emissions() {
           <h3 className="font-semibold text-foreground mb-4">Emissions by Category</h3>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={categoryData} layout="vertical">
+              <BarChart data={categoryData ?? []} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
                 <XAxis
                   type="number"
@@ -140,7 +177,7 @@ export default function Emissions() {
                   formatter={(value: number) => [`${value} kg CO₂`, 'Emissions']}
                 />
                 <Bar dataKey="value" radius={[0, 8, 8, 0]}>
-                  {categoryData.map((entry, index) => (
+                  {(categoryData ?? []).map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Bar>
@@ -156,7 +193,7 @@ export default function Emissions() {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={categoryData}
+                  data={categoryData ?? []}
                   cx="50%"
                   cy="50%"
                   innerRadius={70}
@@ -166,7 +203,7 @@ export default function Emissions() {
                   animationBegin={0}
                   animationDuration={800}
                 >
-                  {categoryData.map((entry, index) => (
+                  {(categoryData ?? []).map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
                   ))}
                 </Pie>
@@ -182,7 +219,7 @@ export default function Emissions() {
             </ResponsiveContainer>
           </div>
           <div className="flex flex-wrap justify-center gap-3 mt-4">
-            {categoryData.map((cat) => (
+            {(categoryData ?? []).map((cat) => (
               <div key={cat.name} className="flex items-center gap-2">
                 <div
                   className="w-3 h-3 rounded-full"
@@ -203,7 +240,7 @@ export default function Emissions() {
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             {view === 'monthly' ? (
-              <LineChart data={monthlyData}>
+              <LineChart data={monthlyData ?? []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis
                   dataKey="month"
@@ -249,7 +286,7 @@ export default function Emissions() {
                 />
               </LineChart>
             ) : (
-              <BarChart data={yearlyComparison}>
+              <BarChart data={yearlyComparison ?? []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis
                   dataKey="year"

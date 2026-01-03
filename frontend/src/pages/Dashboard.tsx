@@ -16,6 +16,7 @@ import { RecommendationCard } from '@/components/dashboard/RecommendationCard';
 import { InsightBanner } from '@/components/dashboard/InsightBanner';
 import { ImpactStats } from '@/components/dashboard/ImpactStats';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 const recommendations = [
   {
@@ -44,6 +45,8 @@ const recommendations = [
 export default function Dashboard() {
   const navigate = useNavigate();
   const [result, setResult] = useState<any | null>(null);
+  const [history, setHistory] = useState<any | null>(null);
+  const [view, setView] = useState<'monthly' | 'yearly'>('monthly');
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
   useEffect(() => {
@@ -63,7 +66,42 @@ export default function Dashboard() {
     };
 
     fetchLatest();
+    const fetchHistory = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const headers: Record<string,string> = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch(`${API_URL}/api/results/history`, { headers });
+        if (!res.ok) return setHistory(null);
+        const data = await res.json();
+        setHistory(data);
+      } catch (err) {
+        console.error('Failed to fetch history', err);
+      }
+    };
+
+    fetchHistory();
   }, []);
+
+  // derive yearly comparisons for top stats
+  const thisYear = history?.yearly?.length ? history.yearly[history.yearly.length - 1] : null;
+  const prevYear = history?.yearly?.length > 1 ? history.yearly[history.yearly.length - 2] : null;
+  const totalThisYear = thisYear?.total ?? (result?.emissions?.total ? result.emissions.total * 12 : 0);
+  const totalPrevYear = prevYear?.total ?? 0;
+  const totalPctChange = totalPrevYear ? Math.round(((totalThisYear - totalPrevYear) / totalPrevYear) * 100) : 0;
+
+  const energyThisYear = thisYear?.electricity ?? 0;
+  const energyPrevYear = prevYear?.electricity ?? 0;
+  const energyPctChange = energyPrevYear ? Math.round(((energyThisYear - energyPrevYear) / energyPrevYear) * 100) : 0;
+
+  const latestMonth = history?.monthly?.length ? history.monthly[history.monthly.length - 1] : null;
+  const latestMonthTotal = latestMonth?.total ?? (result?.emissions?.total ?? 0);
+
+  const monthlyAvg = history?.monthly?.length ? Math.round(history.monthly.reduce((s: number, m: any) => s + (m.total || 0), 0) / history.monthly.length) : (result?.emissions?.total ? Math.round(result.emissions.total / 12) : 0);
+  const prevMonth = history?.monthly?.length > 1 ? history.monthly[history.monthly.length - 2] : null;
+  const prevMonthTotal = prevMonth?.total ?? 0;
+  const monthPctChange = prevMonthTotal ? Math.round(((latestMonthTotal - prevMonthTotal) / prevMonthTotal) * 100) : 0;
 
   return (
     <div className="page-container">
@@ -96,15 +134,15 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Footprint"
-          value={result ? String(result.emissions.total) : '—'}
+          value={totalThisYear ? String(Math.round(totalThisYear)) : '—'}
           subtitle="kg CO₂/year"
           icon={Activity}
-          trend={{ value: 0, isPositive: true }}
+          trend={{ value: Math.abs(totalPctChange), isPositive: totalPctChange < 0 }}
           accentColor="primary"
         />
         <StatCard
           title="Monthly Average"
-          value={result ? String(Math.round((result.emissions.total || 0) / 12)) : '—'}
+          value={monthlyAvg ? String(monthlyAvg) : '—'}
           subtitle="kg CO₂"
           icon={TrendingDown}
           trend={{ value: 0, isPositive: true }}
@@ -112,17 +150,18 @@ export default function Dashboard() {
         />
         <StatCard
           title="Energy Usage"
-          value={result ? String(result.emissions.electricity) : '—'}
+          value={energyThisYear ? String(Math.round(energyThisYear)) : '—'}
           subtitle="kg CO₂/year"
           icon={Zap}
+          trend={{ value: Math.abs(energyPctChange), isPositive: energyPctChange < 0 }}
           accentColor="warning"
         />
         <StatCard
           title="This Month"
-          value={result ? String(Math.round((result.emissions.total || 0) / 12)) : '—'}
+          value={latestMonthTotal ? String(Math.round(latestMonthTotal)) : '—'}
           subtitle="kg CO₂"
           icon={Leaf}
-          trend={{ value: 0, isPositive: true }}
+          trend={{ value: Math.abs(monthPctChange), isPositive: monthPctChange < 0 }}
           accentColor="success"
         />
       </div>
@@ -130,16 +169,56 @@ export default function Dashboard() {
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-foreground">Trend</h3>
+            <div className="flex items-center gap-2">
+              <button className={cn('px-2 py-1 rounded', view === 'monthly' ? 'bg-primary text-white' : 'bg-muted/20')} onClick={() => setView('monthly')}>Monthly</button>
+              <button className={cn('px-2 py-1 rounded', view === 'yearly' ? 'bg-primary text-white' : 'bg-muted/20')} onClick={() => setView('yearly')}>Yearly</button>
+            </div>
+          </div>
+
           <TrendChart
-            data={
-              result
-                ? Array.from({ length: 12 }).map((_, i) => ({
-                    month: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i],
-                    emissions: Math.round((result.emissions.total || 0) / 12),
-                    average: Math.round((result.emissions.total || 0) / 12),
-                  }))
-                : undefined
-            }
+            data={(() => {
+              if (view === 'monthly') {
+                if (history?.monthly && Array.isArray(history.monthly)) {
+                  const monthsNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                  const dataPoints = history.monthly.map((m: any) => ({
+                    month: monthsNames[(m.month - 1) % 12] + ` ${String(m.year).slice(-2)}`,
+                    emissions: Math.round(m.total || 0),
+                    average: Math.round((history.monthly.reduce((s: number, x: any) => s + (x.total || 0), 0) / 12) || 0),
+                  }));
+
+                  return dataPoints;
+                }
+
+                // fallback to single-result derived monthly average
+                return result
+                  ? Array.from({ length: 12 }).map((_, i) => ({
+                      month: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i],
+                      emissions: Math.round((result.emissions.total || 0) / 12),
+                      average: Math.round((result.emissions.total || 0) / 12),
+                    }))
+                  : undefined;
+              }
+
+              // yearly view
+              if (view === 'yearly') {
+                if (history?.yearly && Array.isArray(history.yearly)) {
+                  return history.yearly.map((y: any) => ({
+                    month: String(y.year),
+                    emissions: Math.round(y.total || 0),
+                    average: Math.round((history.yearly.reduce((s: number, x: any) => s + (x.total || 0), 0) / (history.yearly.length || 1)) || 0),
+                  }));
+                }
+
+                // fallback: show current year total only
+                return result
+                  ? [{ month: String(new Date().getFullYear()), emissions: Math.round(result.emissions.total || 0), average: Math.round(result.emissions.total || 0) }]
+                  : undefined;
+              }
+
+              return undefined;
+            })()}
           />
         </div>
         <EmissionsChart
