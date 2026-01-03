@@ -14,6 +14,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { useNavigate } from 'react-router-dom';
+import emailjs from "emailjs-com";
 
 const faqs = [
   {
@@ -43,17 +45,46 @@ const faqs = [
 ];
 
 export default function Help() {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [expandedFaq, setExpandedFaq] = useState<number | null>(0);
   const [feedback, setFeedback] = useState({ name: '', email: '', message: '' });
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    message: "",
+  });
+  
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };  
 
   const handleSubmitFeedback = (e: React.FormEvent) => {
     e.preventDefault();
-    toast({
-      title: 'Feedback submitted',
-      description: 'Thank you for your feedback! We\'ll get back to you soon.',
-    });
-    setFeedback({ name: '', email: '', message: '' });
+
+    emailjs
+      .send(
+        "service_t63m13b",
+        "template_4t07c7u",
+        {
+          name: feedback.name,
+          email: feedback.email,
+          message: feedback.message,
+        },
+        "2bx6eHJ1W_8TVMFvH"
+      )
+      .then(
+        () => {
+          alert("Feedback sent successfully!");
+          setFormData({ name: "", email: "", message: "" });
+        },
+        (error) => {
+          console.error(error);
+          alert("Failed to send feedback. Try again.");
+        }
+      );
   };
 
   return (
@@ -76,7 +107,7 @@ export default function Help() {
           </p>
         </div>
 
-        <div className="dashboard-card text-center group hover:border-primary/30">
+        <div className="dashboard-card text-center group hover:border-primary/30" onClick={() => navigate("/assistant")}>
           <div className="w-14 h-14 mx-auto rounded-xl bg-warning/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
             <MessageSquare className="w-7 h-7 text-warning" />
           </div>
@@ -86,7 +117,10 @@ export default function Help() {
           </p>
         </div>
 
-        <div className="dashboard-card text-center group hover:border-primary/30">
+        <div className="dashboard-card text-center group hover:border-primary/30" onClick={() => {
+                        const section = document.getElementById("contact");
+                        section?.scrollIntoView({ behavior: "smooth" });
+        }}>
           <div className="w-14 h-14 mx-auto rounded-xl bg-success/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
             <Mail className="w-7 h-7 text-success" />
           </div>
@@ -140,7 +174,7 @@ export default function Help() {
       </div>
 
       {/* Feedback Form */}
-      <div className="dashboard-card">
+      <div className="dashboard-card" id='contact'>
         <h2 className="font-semibold text-foreground mb-6 flex items-center gap-2">
           <MessageSquare className="w-5 h-5 text-primary" />
           Send Feedback
