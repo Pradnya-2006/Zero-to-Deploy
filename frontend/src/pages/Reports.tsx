@@ -1,5 +1,6 @@
-import { FileText, Download, Share2, Calendar, TrendingDown } from 'lucide-react';
+import { FileText, Download, Share2, Calendar, TrendingDown, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -7,8 +8,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const monthlyReports = [
   { month: 'December 2024', emissions: 240, change: -8 },
@@ -28,42 +31,154 @@ const yearlyStats = {
   treesEquivalent: 180,
 };
 
+/**
+ * Dynamic PDF generator using jsPDF + autotable
+ */
+function generatePDF(selectedYear: string, monthlyReports: {month:string,emissions:number,change:number}[], yearlyStats: any) {
+  const pdf = new jsPDF('p', 'mm', 'a4');
+  // Use Times (Times New Roman) for all PDF text
+  try {
+    pdf.setFont('times', 'normal');
+  } catch (e) {
+    // If setting font fails, fall back to default
+    console.warn('Could not set Times font for jsPDF', e);
+  }
+  let y = 20;
+
+  pdf.setFontSize(18);
+  pdf.text(`${selectedYear} Annual Carbon Report`, 14, y);
+  y += 10;
+
+  pdf.setFontSize(12);
+  pdf.text(`Total Emissions: ${yearlyStats.totalEmissions} kg CO₂`, 14, y);
+  y += 8;
+  pdf.text(`Monthly Average: ${yearlyStats.monthlyAverage} kg CO₂`, 14, y);
+  y += 8;
+  pdf.text(`Total Reduction: -${yearlyStats.totalReduction} kg CO₂ saved`, 14, y);
+  y += 8;
+  pdf.text(`Trees Equivalent: ${yearlyStats.treesEquivalent} trees`, 14, y);
+  y += 12;
+
+  pdf.setFontSize(14);
+  pdf.text('Monthly Breakdown', 14, y);
+  y += 8;
+
+  autoTable(pdf as any, {
+    startY: y,
+    head: [['Month', 'Emissions (kg CO₂)', 'Change (%)']],
+    body: monthlyReports.map(r => [r.month, r.emissions.toString(), r.change.toString()]),
+    theme: 'grid',
+    headStyles: { fillColor: [0, 150, 136] },
+    styles: { font: 'times', fontSize: 11 },
+  });
+
+  // lastAutoTable is set by autotable plugin
+  const lastAuto = (pdf as any).lastAutoTable;
+  const lastY = lastAuto && typeof lastAuto.finalY === 'number' ? lastAuto.finalY : y;
+  y = lastY + 10;
+
+  pdf.setFontSize(14);
+  pdf.text('Key Insights', 14, y);
+  y += 8;
+  pdf.setFontSize(12);
+  const best = monthlyReports.find(r => r.month.includes(yearlyStats.bestMonth));
+  pdf.text(
+    `Best Performance: ${yearlyStats.bestMonth} was your lowest emission month with only ${best?.emissions ?? '-'} kg CO₂.`,
+    14,
+    y
+  );
+  y += 8;
+  pdf.text(`Area for Improvement: ${yearlyStats.worstMonth} had the highest emissions.`, 14, y);
+  y += 8;
+  const percent = Math.round((yearlyStats.totalReduction / yearlyStats.totalEmissions) * 100);
+  pdf.text(`Overall Progress: Reduced footprint by ${percent}%.`, 14, y);
+  y += 8;
+  pdf.text(`Environmental Impact: Equivalent to planting ${yearlyStats.treesEquivalent} trees.`, 14, y);
+
+  pdf.save(`${selectedYear}-carbon-report.pdf`);
+}
+
 export default function Reports() {
   const { toast } = useToast();
   const [selectedYear, setSelectedYear] = useState('2024');
+  const reportRef = useRef<HTMLDivElement | null>(null);
 
   const handleDownload = () => {
     toast({
-      title: 'Downloading report...',
-      description: 'Your PDF report is being generated.',
+      title: 'Generating PDF...',
+      description: 'Preparing your report for download.',
     });
-    // Simulate download
-    setTimeout(() => {
-      toast({
-        title: 'Report ready!',
-        description: 'Your carbon footprint report has been downloaded.',
-      });
-    }, 1500);
-  };
 
-  const handleShare = () => {
-    if (navigator.share) {
-      navigator.share({
-        title: 'My Carbon Footprint Report',
-        text: `I reduced my carbon footprint by ${yearlyStats.totalReduction} kg CO₂ this year!`,
-        url: window.location.href,
-      });
-    } else {
-      navigator.clipboard.writeText(window.location.href);
-      toast({
-        title: 'Link copied!',
-        description: 'Share link copied to clipboard.',
-      });
+    try {
+      generatePDF(selectedYear, monthlyReports, yearlyStats);
+      toast({ title: 'Download started', description: 'Your PDF has been downloaded.' });
+    } catch (e) {
+      console.error(e);
+      toast({ title: 'Download failed', description: 'Could not generate PDF. Try again.' });
     }
   };
 
+  const handleCopyLink = async () => {
+    const url = window.location.href;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      toast({ title: 'Link copied!', description: 'Share link copied to clipboard.' });
+    } catch (err) {
+      console.error('copy failed', err);
+      toast({ title: 'Copy failed', description: 'Could not copy link.' });
+    }
+  };
+
+  const handleWhatsApp = () => {
+    const text = encodeURIComponent(
+      `I reduced my carbon footprint by ${yearlyStats.totalReduction} kg CO₂ this year! ${window.location.href}`
+    );
+    const url = `https://api.whatsapp.com/send?text=${text}`;
+    window.open(url, '_blank');
+  };
+
+
+  const handleNativeShare = async () => {
+    if ((navigator as any).share) {
+      try {
+        await (navigator as any).share({
+          title: `${selectedYear} Carbon Footprint Report`,
+          text: `I reduced my carbon footprint by ${yearlyStats.totalReduction} kg CO₂ this year!`,
+          url: window.location.href,
+        });
+      } catch (e) {
+        // user cancelled or failed
+      }
+    } else {
+      // Fallback: open Twitter intent or copy link
+      const text = encodeURIComponent(
+        `I reduced my carbon footprint by ${yearlyStats.totalReduction} kg CO₂ this year! ${window.location.href}`
+      );
+      const twitter = `https://twitter.com/intent/tweet?text=${text}`;
+      try {
+        window.open(twitter, '_blank');
+      } catch (e) {
+        handleCopyLink();
+      }
+    }
+  };
+
+  
+
   return (
-    <div className="page-container">
+    <div className="page-container" ref={reportRef}>
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -81,10 +196,27 @@ export default function Reports() {
               <SelectItem value="2022">2022</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" onClick={handleShare} className="gap-2">
-            <Share2 className="w-4 h-4" />
-            Share
-          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="gap-2">
+                <Share2 className="w-4 h-4" />
+                Share
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent>
+              <div className="flex flex-col gap-2">
+                <Button variant="ghost" onClick={handleWhatsApp} className="justify-start gap-2">
+                  <MessageSquare className="w-4 h-4" /> WhatsApp
+                </Button>
+                <Button variant="ghost" onClick={handleCopyLink} className="justify-start gap-2">
+                  Copy link
+                </Button>
+                <Button variant="ghost" onClick={handleNativeShare} className="justify-start gap-2">
+                  Native Share
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
           <Button onClick={handleDownload} className="gap-2 gradient-emerald text-primary-foreground">
             <Download className="w-4 h-4" />
             Download PDF
@@ -205,10 +337,27 @@ export default function Reports() {
           Inspire others by sharing your sustainability journey. Every action counts!
         </p>
         <div className="flex justify-center gap-3">
-          <Button variant="outline" onClick={handleShare}>
-            <Share2 className="w-4 h-4 mr-2" />
-            Share Report
-          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline">
+                <Share2 className="w-4 h-4 mr-2" />
+                Share Report
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent>
+              <div className="flex flex-col gap-2">
+                <Button variant="ghost" onClick={handleWhatsApp} className="justify-start gap-2">
+                  <MessageSquare className="w-4 h-4" /> WhatsApp
+                </Button>
+                <Button variant="ghost" onClick={handleCopyLink} className="justify-start gap-2">
+                  Copy link
+                </Button>
+                <Button variant="ghost" onClick={handleNativeShare} className="justify-start gap-2">
+                  Native Share
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
           <Button onClick={handleDownload} className="gradient-emerald text-primary-foreground">
             <Download className="w-4 h-4 mr-2" />
             Download PDF
