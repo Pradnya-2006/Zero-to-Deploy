@@ -17,6 +17,7 @@ import Assistant from "./pages/Assistant";
 import Settings from "./pages/Settings";
 import Help from "./pages/Help";
 import NotFound from "./pages/NotFound";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -31,18 +32,20 @@ const App = () => (
           <Route path="/" element={<Landing />} />
           <Route path="/auth" element={<Auth />} />
           
+          <Route element={<ProtectedRoute />}>
           {/* Protected routes with sidebar layout */}
-          <Route element={<Layout />}>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/calculator" element={<Calculator />} />
-            <Route path="/emissions" element={<Emissions />} />
-            <Route path="/recommendations" element={<Recommendations />} />
-            <Route path="/goals" element={<Goals />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/learn" element={<Learn />} />
-            <Route path="/assistant" element={<Assistant />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/help" element={<Help />} />
+            <Route element={<Layout />}>
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/calculator" element={<Calculator />} />
+              <Route path="/emissions" element={<Emissions />} />
+              <Route path="/recommendations" element={<Recommendations />} />
+              <Route path="/goals" element={<Goals />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/learn" element={<Learn />} />
+              <Route path="/assistant" element={<Assistant />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/help" element={<Help />} />
+            </Route>
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

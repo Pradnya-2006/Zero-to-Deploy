@@ -68,37 +68,54 @@ const Auth = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!validateForm()) return;
-
+  
     setIsLoading(true);
-
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    if (mode === 'signup') {
-      setShowSuccess(true);
-      toast({
-        title: 'Account created!',
-        description: 'Welcome to EcoTrack. Redirecting to your dashboard...',
+  
+    try {
+      const endpoint =
+        mode === "signup"
+          ? "http://localhost:5000/api/auth/signup"
+          : "http://localhost:5000/api/auth/login";
+  
+      const payload =
+        mode === "signup"
+          ? {
+              fullName: formData.fullName,
+              email: formData.email,
+              password: formData.password,
+            }
+          : {
+              email: formData.email,
+              password: formData.password,
+            };
+  
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
-      
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 2000);
-    } else {
+  
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+  
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+  
+      toast({ title: "Success", description: data.message });
+  
+      navigate("/dashboard");
+    } catch (err: any) {
       toast({
-        title: 'Welcome back!',
-        description: 'Redirecting to your dashboard...',
+        title: "Error",
+        description: err.message,
+        variant: "destructive",
       });
-      
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 1000);
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
+  
 
   const handleInputChange = (field: string, value: string | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));

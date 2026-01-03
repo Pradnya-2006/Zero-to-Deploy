@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState ,useEffect } from 'react';
 import { User, Bell, Globe, Shield, Palette, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,11 +17,23 @@ import { useToast } from '@/hooks/use-toast';
 export default function Settings() {
   const { toast } = useToast();
   
+  const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+
   const [profile, setProfile] = useState({
-    name: 'Alex Johnson',
-    email: 'alex.johnson@email.com',
-    location: 'United States',
+    name: "",
+    email: "",
+    location: "India",
   });
+
+  useEffect(() => {
+    if (storedUser) {
+      setProfile((prev) => ({
+        ...prev,
+        name: storedUser.fullName || "",
+        email: storedUser.email || "",
+      }));
+    }
+  }, []);
 
   const [preferences, setPreferences] = useState({
     emailNotifications: true,
