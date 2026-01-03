@@ -64,9 +64,13 @@ export default function Goals() {
     }
 
     try {
+      const token = localStorage.getItem('token');
+      const headers: Record<string,string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch('/api/goals', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(payload),
       });
 
@@ -98,7 +102,11 @@ export default function Goals() {
     setLoading(true);
     setFetchError(null);
     try {
-      const res = await fetch('/api/goals');
+      const token = localStorage.getItem('token');
+      const headers: Record<string,string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/goals', { headers });
       if (!res.ok) throw new Error('Failed to fetch goals');
       const data = await res.json();
       // map server shape to local Goal shape

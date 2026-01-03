@@ -50,7 +50,11 @@ export default function Dashboard() {
     // fetch latest saved result
     const fetchLatest = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/results/latest`);
+        const token = localStorage.getItem('token');
+        const headers: Record<string,string> = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch(`${API_URL}/api/results/latest`, { headers });
         const data = await res.json();
         if (data?.found && data?.result) setResult(data.result);
       } catch (err) {

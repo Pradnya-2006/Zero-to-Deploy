@@ -6,7 +6,8 @@ const router = express.Router();
 // GET /api/results/latest?userId=...
 router.get('/latest', async (req: Request, res: Response) => {
   try {
-    const userId = req.query.userId as string | undefined;
+    // Prefer authenticated user id (from JWT). Fall back to query param for compatibility.
+    const userId = (req as any).userId as string | undefined || (req.query.userId as string | undefined);
 
     const query = userId ? { userId } : {};
 

@@ -6,11 +6,13 @@ const router = express.Router();
 // Create a new goal
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { title, targetKgCO2, unit, deadline, currentValue, userId } = req.body;
+    const { title, targetKgCO2, unit, deadline, currentValue } = req.body;
 
     if (!title || typeof targetKgCO2 === 'undefined') {
       return res.status(400).json({ message: 'Missing required fields' });
     }
+
+    const userId = (req as any).userId as string | undefined;
 
     const goal = await Goal.create({ title, targetKgCO2, unit, deadline, currentValue, userId });
     return res.status(201).json(goal);
@@ -21,9 +23,11 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // List goals
-router.get('/', async (_req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
-    const goals = await Goal.find().sort({ createdAt: -1 }).lean();
+    const userId = (req as any).userId as string | undefined || (req.query.userId as string | undefined);
+    const query = userId ? { userId } : {};
+    const goals = await Goal.find(query).sort({ createdAt: -1 }).lean();
     return res.json(goals);
   } catch (err: any) {
     console.error('GET /api/goals error', err);

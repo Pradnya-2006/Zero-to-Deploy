@@ -435,9 +435,13 @@ export default function Calculator() {
       lifestyle,
     };
 
+    const token = localStorage.getItem('token');
+    const headers: Record<string,string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
     fetch(`${API_URL}/api/calculate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(payload),
     })
       .then(async (res) => {

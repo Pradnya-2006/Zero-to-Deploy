@@ -55,6 +55,8 @@ export function Sidebar({ isOpen, onToggle, isCollapsed, onCollapse }: SidebarPr
       // ignore
     }
     navigate('/auth?mode=login');
+    // reload to clear any in-memory UI state tied to the previous user
+    setTimeout(() => window.location.reload(), 50);
   };
 
   useEffect(() => {

@@ -14,6 +14,10 @@ dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
+import authMiddleware from './middleware/auth';
+
+// parse JWT (if present) and attach userId to req.userId
+app.use(authMiddleware);
 
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET as string;

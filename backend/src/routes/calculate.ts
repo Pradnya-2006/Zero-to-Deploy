@@ -11,8 +11,10 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const emissions = calculateFootprint(req.body);
 
+    const userIdFromReq = (req as any).userId as string | undefined;
+
     const saved = await CarbonResult.create({
-      userId: req.body.userId ?? 'anonymous',
+      userId: userIdFromReq ?? req.body.userId ?? 'anonymous',
       inputs: req.body,
       emissions,
     });
