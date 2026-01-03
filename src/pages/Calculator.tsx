@@ -28,6 +28,7 @@ export default function Calculator() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(1);
+  const [calculated, setCalculated] = useState(false);
   
   // Energy state
   const [electricity, setElectricity] = useState([150]);
@@ -76,7 +77,7 @@ export default function Calculator() {
         title: 'Calculation complete!',
         description: 'Your carbon footprint has been calculated and saved.',
       });
-      navigate('/');
+      setCalculated(true);
     }
   };
 
@@ -345,6 +346,15 @@ export default function Calculator() {
           {currentStep < steps.length && <ChevronRight className="w-4 h-4" />}
         </Button>
       </div>
+
+      {calculated && (
+        <div className="mt-6 dashboard-card">
+          <h3 className="text-lg font-semibold mb-2">Results</h3>
+          <p className="text-sm text-muted-foreground">
+            Estimated annual emissions: <span className="font-medium">— t CO₂</span>
+          </p>
+        </div>
+      )}
     </div>
   );
 }

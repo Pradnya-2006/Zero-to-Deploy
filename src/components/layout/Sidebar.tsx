@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Calculator,
@@ -15,12 +15,13 @@ import {
   X,
   Leaf,
   ChevronLeft,
+  LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
 const menuItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+  { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: Calculator, label: 'Carbon Calculator', path: '/calculator' },
   { icon: PieChart, label: 'Emissions Breakdown', path: '/emissions' },
   { icon: Lightbulb, label: 'Recommendations', path: '/recommendations' },
@@ -41,6 +42,24 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onToggle, isCollapsed, onCollapse }: SidebarProps) {
   const location = useLocation();
+  const [collapsed, setCollapsed] = useState(isCollapsed);
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('auth');
+      sessionStorage.removeItem('token');
+    } catch (e) {
+      // ignore
+    }
+    navigate('/auth?mode=login');
+  };
+
+  useEffect(() => {
+    setCollapsed(isCollapsed);
+  }, [isCollapsed]);
 
   return (
     <>
@@ -58,7 +77,7 @@ export function Sidebar({ isOpen, onToggle, isCollapsed, onCollapse }: SidebarPr
           'fixed top-0 left-0 h-full bg-sidebar z-50 transition-all duration-300 ease-in-out flex flex-col',
           isOpen ? 'translate-x-0' : '-translate-x-full',
           'lg:translate-x-0',
-          isCollapsed ? 'lg:w-20' : 'lg:w-64',
+          collapsed ? 'lg:w-20' : 'lg:w-64',
           'w-64'
         )}
       >
@@ -66,7 +85,7 @@ export function Sidebar({ isOpen, onToggle, isCollapsed, onCollapse }: SidebarPr
         <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
           <div className={cn(
             'flex items-center gap-3 transition-opacity duration-200',
-            isCollapsed && 'lg:opacity-0 lg:invisible'
+            collapsed && 'lg:opacity-0 lg:invisible'
           )}>
             <div className="w-10 h-10 rounded-xl gradient-emerald flex items-center justify-center shadow-glow">
               <Leaf className="w-6 h-6 text-sidebar-primary-foreground" />
@@ -76,7 +95,7 @@ export function Sidebar({ isOpen, onToggle, isCollapsed, onCollapse }: SidebarPr
               <p className="text-xs text-sidebar-muted-foreground">Carbon Footprint</p>
             </div>
           </div>
-          
+
           {/* Mobile Close Button */}
           <Button
             variant="ghost"
@@ -87,22 +106,27 @@ export function Sidebar({ isOpen, onToggle, isCollapsed, onCollapse }: SidebarPr
             <X className="w-5 h-5" />
           </Button>
 
-          {/* Desktop Collapse Button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onCollapse}
+
+          <button
+            onClick={() => {
+              setCollapsed((s) => !s);
+              onCollapse();
+            }}
             className={cn(
-              'hidden lg:flex text-sidebar-foreground hover:bg-sidebar-accent transition-transform duration-200',
-              isCollapsed && 'rotate-180'
+              'hidden lg:flex items-center justify-center',
+              'absolute -right-3 top-6 z-50',
+              'h-8 w-8 rounded-full bg-sidebar border border-sidebar-border shadow-md',
+              'hover:bg-sidebar-accent transition-transform',
+              collapsed && 'rotate-180'
             )}
           >
-            <ChevronLeft className="w-5 h-5" />
-          </Button>
+            <ChevronLeft className="w-4 h-4 text-sidebar-foreground" />
+          </button>
+
         </div>
 
         {/* Collapsed Logo */}
-        {isCollapsed && (
+        {collapsed && (
           <div className="hidden lg:flex justify-center py-4 border-b border-sidebar-border">
             <div className="w-10 h-10 rounded-xl gradient-emerald flex items-center justify-center shadow-glow">
               <Leaf className="w-6 h-6 text-sidebar-primary-foreground" />
@@ -125,9 +149,9 @@ export function Sidebar({ isOpen, onToggle, isCollapsed, onCollapse }: SidebarPr
                     className={cn(
                       'sidebar-item',
                       isActive && 'sidebar-item-active',
-                      isCollapsed && 'lg:justify-center lg:px-0'
+                      collapsed && 'lg:justify-center lg:px-0'
                     )}
-                    title={isCollapsed ? item.label : undefined}
+                    title={collapsed ? item.label : undefined}
                   >
                     <item.icon className={cn(
                       'w-5 h-5 flex-shrink-0',
@@ -135,7 +159,7 @@ export function Sidebar({ isOpen, onToggle, isCollapsed, onCollapse }: SidebarPr
                     )} />
                     <span className={cn(
                       'font-medium transition-opacity duration-200',
-                      isCollapsed && 'lg:hidden'
+                      collapsed && 'lg:hidden'
                     )}>
                       {item.label}
                     </span>
@@ -149,27 +173,44 @@ export function Sidebar({ isOpen, onToggle, isCollapsed, onCollapse }: SidebarPr
         {/* Footer */}
         <div className={cn(
           'p-4 border-t border-sidebar-border',
-          isCollapsed && 'lg:px-2'
+          collapsed && 'lg:px-2'
         )}>
           <div className={cn(
             'bg-sidebar-accent rounded-xl p-4 text-center',
-            isCollapsed && 'lg:p-2'
+            collapsed && 'lg:p-2'
           )}>
             <p className={cn(
               'text-xs text-sidebar-muted-foreground mb-2',
-              isCollapsed && 'lg:hidden'
+              collapsed && 'lg:hidden'
             )}>
               🌱 Every action counts
             </p>
             <p className={cn(
               'text-sm font-medium text-sidebar-foreground',
-              isCollapsed && 'lg:hidden'
+              collapsed && 'lg:hidden'
             )}>
               -2.5 tons CO₂ this year
             </p>
-            {isCollapsed && (
+            {collapsed && (
               <span className="hidden lg:block text-xl">🌱</span>
             )}
+          </div>
+
+          <div className={cn(
+            'mt-3'
+          )}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              className={cn(
+                'w-full justify-start gap-3 text-sidebar-foreground hover:bg-sidebar-accent',
+                collapsed && 'lg:justify-center'
+              )}
+            >
+              <LogOut className="w-5 h-5" />
+              <span className={cn('font-medium', collapsed && 'lg:hidden')}>Logout</span>
+            </Button>
           </div>
         </div>
       </aside>
