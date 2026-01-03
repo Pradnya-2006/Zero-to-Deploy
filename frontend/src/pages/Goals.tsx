@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Target, TrendingDown, Award, Check, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,69 +14,35 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 
 interface Goal {
-  id: number;
+  _id: string;
   title: string;
-  target: number;
-  current: number;
-  unit: string;
-  deadline: string;
-  isCompleted: boolean;
+  target: number; // target value (targetKgCO2)
+  current: number; // current value
+  unit?: string;
+  deadline?: string | null;
 }
 
-const initialGoals: Goal[] = [
-  {
-    id: 1,
-    title: 'Annual carbon reduction',
-    target: 3000,
-    current: 3200,
-    unit: 'kg CO₂',
-    deadline: 'Dec 2024',
-    isCompleted: false,
-  },
-  {
-    id: 2,
-    title: 'Monthly electricity savings',
-    target: 120,
-    current: 135,
-    unit: 'kWh',
-    deadline: 'Monthly',
-    isCompleted: false,
-  },
-  {
-    id: 3,
-    title: 'Switch to LED bulbs',
-    target: 10,
-    current: 10,
-    unit: 'bulbs',
-    deadline: 'Completed',
-    isCompleted: true,
-  },
-];
-
-const milestones = [
-  { title: 'First calculation', description: 'Completed your first carbon footprint calculation', earned: true, icon: '🎯' },
-  { title: 'Week streak', description: 'Tracked your footprint for 7 consecutive days', earned: true, icon: '🔥' },
-  { title: '10% reduction', description: 'Reduced your footprint by 10%', earned: true, icon: '📉' },
-  { title: 'Green commuter', description: 'Used public transport for a month', earned: false, icon: '🚌' },
-  { title: 'Zero waste week', description: 'Went a week with minimal waste', earned: false, icon: '♻️' },
-  { title: 'Carbon neutral', description: 'Achieve net-zero emissions', earned: false, icon: '🌍' },
-];
+// milestones are derived from current aggregate progress below
 
 export default function Goals() {
   const { toast } = useToast();
-  const [goals, setGoals] = useState(initialGoals);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newGoal, setNewGoal] = useState({
     title: '',
     target: [3000],
     unit: 'kg CO₂',
     deadline: '',
+    current: '',
   });
 
-  const handleAddGoal = () => {
+  const handleAddGoal = async () => {
     if (!newGoal.title || !newGoal.deadline) {
       toast({
         title: 'Missing information',
@@ -86,30 +52,96 @@ export default function Goals() {
       return;
     }
 
-    const goal: Goal = {
-      id: Date.now(),
+    const payload = {
       title: newGoal.title,
-      target: newGoal.target[0],
-      current: newGoal.target[0] + 500,
-      unit: newGoal.unit,
+      targetKgCO2: Number(newGoal.target[0]),
       deadline: newGoal.deadline,
-      isCompleted: false,
     };
 
-    setGoals([...goals, goal]);
-    setNewGoal({ title: '', target: [3000], unit: 'kg CO₂', deadline: '' });
-    setIsDialogOpen(false);
-    
-    toast({
-      title: 'Goal created!',
-      description: 'Your new goal has been added. Good luck!',
-    });
+    // include optional currentValue if provided
+    if (newGoal.current !== '' && newGoal.current !== null && typeof newGoal.current !== 'undefined') {
+      payload.currentValue = Number(newGoal.current);
+    }
+
+    try {
+      const res = await fetch('/api/goals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to create goal');
+      }
+
+      const saved = await res.json();
+      // refetch goals to keep UI in sync with DB
+      await fetchGoals();
+      setNewGoal({ title: '', target: [3000], unit: 'kg CO₂', deadline: '', current: '' });
+      setIsDialogOpen(false);
+
+      toast({
+        title: 'Goal created!',
+        description: 'Your new goal has been added. Good luck!',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error?.message || 'Could not create goal',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const beforeFootprint = 4000;
-  const afterFootprint = 3200;
-  const reduction = beforeFootprint - afterFootprint;
-  const reductionPercentage = Math.round((reduction / beforeFootprint) * 100);
+  const fetchGoals = async () => {
+    setLoading(true);
+    setFetchError(null);
+    try {
+      const res = await fetch('/api/goals');
+      if (!res.ok) throw new Error('Failed to fetch goals');
+      const data = await res.json();
+      // map server shape to local Goal shape
+      const mapped: Goal[] = data.map((g: any) => {
+        const targetVal = Number(g.targetKgCO2 || 0);
+        const currentVal = typeof g.currentValue !== 'undefined' && g.currentValue !== null
+          ? Number(g.currentValue)
+          : targetVal;
+
+        return {
+          _id: g._id,
+          title: g.title,
+          target: targetVal,
+          current: currentVal,
+          unit: 'kg CO₂',
+          deadline: g.deadline ? new Date(g.deadline).toLocaleDateString() : '',
+        } as Goal;
+      });
+      setGoals(mapped);
+    } catch (err: any) {
+      setFetchError(err?.message || 'Error fetching goals');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchGoals();
+  }, []);
+
+  // Aggregate progress from goals
+  const totalTarget = goals.reduce((s, g) => s + (g.target || 0), 0);
+  const totalCurrent = goals.reduce((s, g) => s + (g.current || 0), 0);
+  const reduction = totalTarget - totalCurrent;
+  const reductionPercentage = totalTarget > 0 ? Math.round((reduction / totalTarget) * 100) : 0;
+
+  // derive milestones dynamically
+  const milestones = [
+    { title: 'First calculation', description: 'Completed your first carbon footprint calculation', earned: goals.length > 0, icon: '🎯' },
+    { title: '10% reduction', description: 'Reduced your footprint by 10%', earned: reductionPercentage >= 10, icon: '📉' },
+    { title: '20% reduction', description: 'Reduced your footprint by 20%', earned: reductionPercentage >= 20, icon: '🔥' },
+    { title: 'Carbon neutral', description: 'Achieve net-zero emissions', earned: totalCurrent <= 0, icon: '🌍' },
+  ];
 
   return (
     <div className="page-container">
@@ -166,6 +198,16 @@ export default function Goals() {
                   onChange={(e) => setNewGoal({ ...newGoal, deadline: e.target.value })}
                 />
               </div>
+              <div>
+                <label className="text-sm font-medium mb-2 block">Current value (optional)</label>
+                <Input
+                  type="number"
+                  placeholder="e.g., 3200"
+                  value={newGoal.current}
+                  onChange={(e) => setNewGoal({ ...newGoal, current: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground mt-1">Optional: set the current baseline for this goal.</p>
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
@@ -190,7 +232,7 @@ export default function Goals() {
           {/* Before */}
           <div className="text-center">
             <p className="text-sm text-muted-foreground mb-2">Starting Footprint</p>
-            <p className="text-4xl font-bold text-foreground mb-1">{beforeFootprint.toLocaleString()}</p>
+            <p className="text-4xl font-bold text-foreground mb-1">{totalTarget.toLocaleString()}</p>
             <p className="text-sm text-muted-foreground">kg CO₂/year</p>
           </div>
 
@@ -205,7 +247,7 @@ export default function Goals() {
           {/* After */}
           <div className="text-center">
             <p className="text-sm text-muted-foreground mb-2">Current Footprint</p>
-            <p className="text-4xl font-bold text-success mb-1">{afterFootprint.toLocaleString()}</p>
+            <p className="text-4xl font-bold text-success mb-1">{totalCurrent.toLocaleString()}</p>
             <p className="text-sm text-muted-foreground">kg CO₂/year</p>
           </div>
         </div>
@@ -223,60 +265,65 @@ export default function Goals() {
           <Target className="w-5 h-5 text-primary" />
           Active Goals
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {goals.map((goal) => {
-            const progress = goal.isCompleted
-              ? 100
-              : Math.max(0, Math.round(((goal.current - goal.target) / goal.current) * 100));
-            const progressToTarget = goal.isCompleted
-              ? 100
-              : Math.round((1 - (goal.current - goal.target) / goal.current) * 100);
 
-            return (
-              <div
-                key={goal.id}
-                className={cn(
-                  'dashboard-card',
-                  goal.isCompleted && 'border-success/30 bg-success/5'
-                )}
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h4 className="font-semibold text-foreground">{goal.title}</h4>
-                    <p className="text-sm text-muted-foreground">{goal.deadline}</p>
-                  </div>
-                  {goal.isCompleted && (
-                    <div className="w-8 h-8 rounded-full bg-success flex items-center justify-center">
-                      <Check className="w-5 h-5 text-success-foreground" />
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <Skeleton className="h-36" />
+            <Skeleton className="h-36" />
+            <Skeleton className="h-36" />
+          </div>
+        ) : fetchError ? (
+          <div className="dashboard-card text-destructive">Error: {fetchError}</div>
+        ) : goals.length === 0 ? (
+          <div className="dashboard-card">No goals yet. Create your first goal.</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {goals.map((goal) => {
+              const targetValue = goal.target || 1;
+              const currentValue = goal.current ?? 0;
+              const progressPercentage = Math.min(100, Math.round((currentValue / targetValue) * 100));
+              const isCompleted = currentValue >= targetValue;
+
+              return (
+                <div
+                  key={goal._id}
+                  className={cn('dashboard-card', isCompleted && 'border-success/30 bg-success/5')}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h4 className="font-semibold text-foreground">{goal.title}</h4>
+                      <p className="text-sm text-muted-foreground">{goal.deadline}</p>
                     </div>
-                  )}
-                </div>
-
-                <div className="space-y-3">
-                  <Progress
-                    value={progressToTarget}
-                    className={cn('h-3', goal.isCompleted && '[&>div]:bg-success')}
-                  />
-                  
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      Current: <span className="font-medium text-foreground">{goal.current} {goal.unit}</span>
-                    </span>
-                    <span className="text-muted-foreground">
-                      Target: <span className="font-medium text-foreground">{goal.target} {goal.unit}</span>
-                    </span>
+                    {isCompleted && (
+                      <div className="w-8 h-8 rounded-full bg-success flex items-center justify-center">
+                        <Check className="w-5 h-5 text-success-foreground" />
+                      </div>
+                    )}
                   </div>
 
-                  {!goal.isCompleted && (
-                    <p className="text-sm text-muted-foreground">
-                      <span className="font-medium text-primary">{goal.current - goal.target} {goal.unit}</span> to go
-                    </p>
-                  )}
+                  <div className="space-y-3">
+                    <Progress value={progressPercentage} className={cn('h-3', isCompleted && '[&>div]:bg-success')} />
+
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        Current: <span className="font-medium text-foreground">{currentValue} kg CO₂</span>
+                      </span>
+                      <span className="text-muted-foreground">
+                        Target: <span className="font-medium text-foreground">{targetValue} kg CO₂</span>
+                      </span>
+                    </div>
+
+                    {!isCompleted && (
+                      <p className="text-sm text-muted-foreground">
+                        <span className="font-medium text-primary">{Math.max(0, targetValue - currentValue)} kg CO₂</span> to go
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Milestones */}
