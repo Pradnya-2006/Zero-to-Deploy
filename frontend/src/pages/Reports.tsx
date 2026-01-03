@@ -8,27 +8,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-const monthlyReports = [
-  { month: 'December 2024', emissions: 240, change: -8 },
-  { month: 'November 2024', emissions: 250, change: -4 },
-  { month: 'October 2024', emissions: 260, change: 0 },
-  { month: 'September 2024', emissions: 270, change: -4 },
-  { month: 'August 2024', emissions: 280, change: -3 },
-  { month: 'July 2024', emissions: 290, change: -12 },
-];
+const initialMonthlyReports: { month: string; emissions: number; change: number }[] = [];
 
-const yearlyStats = {
-  totalEmissions: 4000,
-  monthlyAverage: 333,
-  bestMonth: 'December',
-  worstMonth: 'January',
-  totalReduction: 800,
-  treesEquivalent: 180,
+const initialYearlyStats = {
+  totalEmissions: 0,
+  monthlyAverage: 0,
+  bestMonth: '',
+  worstMonth: '',
+  totalReduction: 0,
+  treesEquivalent: 0,
 };
 
 /**
@@ -100,8 +93,92 @@ function generatePDF(selectedYear: string, monthlyReports: {month:string,emissio
 
 export default function Reports() {
   const { toast } = useToast();
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
   const [selectedYear, setSelectedYear] = useState('2024');
   const reportRef = useRef<HTMLDivElement | null>(null);
+  const [monthlyReports, setMonthlyReports] = useState(initialMonthlyReports);
+  const [yearlyStats, setYearlyStats] = useState<any>(initialYearlyStats);
+  const [availableYears, setAvailableYears] = useState<string[]>(['2024']);
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const headers: Record<string,string> = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch(`${API_URL}/api/results/history`, { headers });
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // populate available years from yearly data
+        if (data?.yearly && Array.isArray(data.yearly)) {
+          const years = data.yearly.map((y: any) => String(y.year)).sort();
+          setAvailableYears(years.length ? years : [String(new Date().getFullYear())]);
+          // if selectedYear is not in years, set to latest available
+          if (!years.includes(selectedYear)) setSelectedYear(years[years.length - 1] || selectedYear);
+        }
+
+        // compute initial stats for the selected year
+        computeForYear(data, selectedYear);
+      } catch (err) {
+        console.error('Failed to fetch history for reports', err);
+      }
+    };
+
+    fetchHistory();
+    // recompute when selectedYear changes
+  }, []);
+
+  useEffect(() => {
+    // fetch history again and recompute for new year
+    const fetchAndCompute = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const headers: Record<string,string> = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_URL}/api/results/history`, { headers });
+        if (!res.ok) return;
+        const data = await res.json();
+        computeForYear(data, selectedYear);
+      } catch (err) {
+        console.error('Failed to fetch history for reports', err);
+      }
+    };
+    fetchAndCompute();
+  }, [selectedYear]);
+
+  function computeForYear(data: any, year: string) {
+    if (!data) return;
+    const months = Array.isArray(data.monthly) ? data.monthly.filter((m: any) => String(m.year) === String(year)) : [];
+    // sort by month index
+    const sorted = months.slice().sort((a: any, b: any) => (a.month || 0) - (b.month || 0));
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const reports = sorted.map((m: any, idx: number) => {
+      const prev = sorted[idx - 1];
+      const change = prev && prev.total ? Math.round(((m.total - prev.total) / (prev.total || 1)) * 100) : 0;
+      return { month: `${monthNames[(m.month || 1) - 1]} ${m.year}`, emissions: Math.round(m.total || 0), change };
+    });
+
+    const yearlyEntry = Array.isArray(data.yearly) ? data.yearly.find((y: any) => String(y.year) === String(year)) : null;
+    const totalEmissions = yearlyEntry ? Math.round(yearlyEntry.total || 0) : reports.reduce((s, r) => s + r.emissions, 0);
+    const monthlyAverage = reports.length ? Math.round(totalEmissions / reports.length) : 0;
+    const best = reports.length ? reports.reduce((a, b) => (a.emissions < b.emissions ? a : b)) : null;
+    const worst = reports.length ? reports.reduce((a, b) => (a.emissions > b.emissions ? a : b)) : null;
+    const prevYearEntry = Array.isArray(data.yearly) ? data.yearly.find((y: any) => String(y.year) === String(Number(year) - 1)) : null;
+    const totalReduction = prevYearEntry ? Math.max(0, Math.round((prevYearEntry.total || 0) - totalEmissions)) : 0;
+    const treesEquivalent = Math.round(totalEmissions / 22);
+
+    setMonthlyReports(reports);
+    setYearlyStats({
+      totalEmissions,
+      monthlyAverage,
+      bestMonth: best ? best.month.split(' ')[0] : '',
+      worstMonth: worst ? worst.month.split(' ')[0] : '',
+      totalReduction,
+      treesEquivalent,
+    });
+  }
 
   const handleDownload = () => {
     toast({
@@ -191,9 +268,9 @@ export default function Reports() {
               <SelectValue placeholder="Year" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="2024">2024</SelectItem>
-              <SelectItem value="2023">2023</SelectItem>
-              <SelectItem value="2022">2022</SelectItem>
+              {availableYears.map((y) => (
+                <SelectItem key={y} value={y}>{y}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Popover>
@@ -267,30 +344,34 @@ export default function Reports() {
             <Calendar className="w-5 h-5 text-primary" />
             Monthly Breakdown
           </h3>
-          <div className="space-y-3">
-            {monthlyReports.map((report) => (
-              <div
-                key={report.month}
-                className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-              >
-                <div>
-                  <p className="font-medium text-foreground">{report.month}</p>
-                  <p className="text-sm text-muted-foreground">{report.emissions} kg CO₂</p>
-                </div>
-                <span
-                  className={
-                    report.change < 0
-                      ? 'text-success font-medium'
-                      : report.change > 0
-                      ? 'text-destructive font-medium'
-                      : 'text-muted-foreground'
-                  }
-                >
-                  {report.change > 0 ? '+' : ''}{report.change}%
-                </span>
-              </div>
-            ))}
-          </div>
+            <div className="space-y-3">
+              {monthlyReports.length === 0 ? (
+                <div className="text-muted-foreground">No monthly data for {selectedYear}.</div>
+              ) : (
+                monthlyReports.map((report) => (
+                  <div
+                    key={report.month}
+                    className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                  >
+                    <div>
+                      <p className="font-medium text-foreground">{report.month}</p>
+                      <p className="text-sm text-muted-foreground">{report.emissions} kg CO₂</p>
+                    </div>
+                    <span
+                      className={
+                        report.change < 0
+                          ? 'text-success font-medium'
+                          : report.change > 0
+                          ? 'text-destructive font-medium'
+                          : 'text-muted-foreground'
+                      }
+                    >
+                      {report.change > 0 ? '+' : ''}{report.change}%
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
         </div>
 
         <div className="dashboard-card">
