@@ -104,6 +104,7 @@ export function Sidebar({ isOpen, onToggle, isCollapsed, onCollapse }: SidebarPr
             size="icon"
             onClick={onToggle}
             className="lg:hidden text-sidebar-foreground hover:bg-sidebar-accent"
+            aria-label="Close sidebar"
           >
             <X className="w-5 h-5" />
           </Button>
@@ -121,6 +122,7 @@ export function Sidebar({ isOpen, onToggle, isCollapsed, onCollapse }: SidebarPr
               'hover:bg-sidebar-accent transition-transform',
               collapsed && 'rotate-180'
             )}
+            aria-label="Toggle sidebar collapse"
           >
             <ChevronLeft className="w-4 h-4 text-sidebar-foreground" />
           </button>

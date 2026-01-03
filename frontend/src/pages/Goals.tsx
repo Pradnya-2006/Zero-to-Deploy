@@ -52,7 +52,7 @@ export default function Goals() {
       return;
     }
 
-    const payload = {
+    const payload: Record<string, any> = {
       title: newGoal.title,
       targetKgCO2: Number(newGoal.target[0]),
       deadline: newGoal.deadline,
