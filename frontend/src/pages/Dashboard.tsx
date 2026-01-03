@@ -46,7 +46,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [result, setResult] = useState<any | null>(null);
   const [history, setHistory] = useState<any | null>(null);
-  const [view, setView] = useState<'monthly' | 'yearly'>('monthly');
+  const [view, setView] = useState<'weekly' | 'monthly' | 'yearly'>('monthly');
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
   useEffect(() => {
@@ -103,6 +103,14 @@ export default function Dashboard() {
   const prevMonthTotal = prevMonth?.total ?? 0;
   const monthPctChange = prevMonthTotal ? Math.round(((latestMonthTotal - prevMonthTotal) / prevMonthTotal) * 100) : 0;
 
+  // weekly comparisons when view === 'weekly'
+  const latestWeek = history?.weekly?.length ? history.weekly[history.weekly.length - 1] : null;
+  const prevWeek = history?.weekly?.length > 1 ? history.weekly[history.weekly.length - 2] : null;
+  const latestWeekTotal = latestWeek?.total ?? (result?.emissions?.total ? (result.emissions.total / 52) : 0);
+  const prevWeekTotal = prevWeek?.total ?? 0;
+  const weekPctChange = prevWeekTotal ? Math.round(((latestWeekTotal - prevWeekTotal) / prevWeekTotal) * 100) : 0;
+  const weeklyAvg = history?.weekly?.length ? Math.round(history.weekly.reduce((s: number, w: any) => s + (w.total || 0), 0) / history.weekly.length) : (result?.emissions?.total ? Math.round(result.emissions.total / 52) : 0);
+
   return (
     <div className="page-container">
       {/* Header */}
@@ -141,9 +149,9 @@ export default function Dashboard() {
           accentColor="primary"
         />
         <StatCard
-          title="Monthly Average"
-          value={monthlyAvg ? String(monthlyAvg) : '—'}
-          subtitle="kg CO₂"
+          title={view === 'weekly' ? 'Weekly Average' : 'Monthly Average'}
+          value={view === 'weekly' ? (weeklyAvg ? String(weeklyAvg) : '—') : (monthlyAvg ? String(monthlyAvg) : '—')}
+          subtitle={view === 'weekly' ? 'kg CO₂/week' : 'kg CO₂'}
           icon={TrendingDown}
           trend={{ value: 0, isPositive: true }}
           accentColor="success"
@@ -157,11 +165,11 @@ export default function Dashboard() {
           accentColor="warning"
         />
         <StatCard
-          title="This Month"
-          value={latestMonthTotal ? String(Math.round(latestMonthTotal)) : '—'}
-          subtitle="kg CO₂"
+          title={view === 'weekly' ? 'This Week' : 'This Month'}
+          value={view === 'weekly' ? (latestWeekTotal ? String(Math.round(latestWeekTotal)) : '—') : (latestMonthTotal ? String(Math.round(latestMonthTotal)) : '—')}
+          subtitle={view === 'weekly' ? 'kg CO₂/week' : 'kg CO₂'}
           icon={Leaf}
-          trend={{ value: Math.abs(monthPctChange), isPositive: monthPctChange < 0 }}
+          trend={{ value: Math.abs(view === 'weekly' ? weekPctChange : monthPctChange), isPositive: (view === 'weekly' ? weekPctChange : monthPctChange) < 0 }}
           accentColor="success"
         />
       </div>
@@ -172,13 +180,36 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-foreground">Trend</h3>
             <div className="flex items-center gap-2">
+              <button className={cn('px-2 py-1 rounded', view === 'weekly' ? 'bg-primary text-white' : 'bg-muted/20')} onClick={() => setView('weekly')}>Weekly</button>
               <button className={cn('px-2 py-1 rounded', view === 'monthly' ? 'bg-primary text-white' : 'bg-muted/20')} onClick={() => setView('monthly')}>Monthly</button>
               <button className={cn('px-2 py-1 rounded', view === 'yearly' ? 'bg-primary text-white' : 'bg-muted/20')} onClick={() => setView('yearly')}>Yearly</button>
             </div>
           </div>
 
           <TrendChart
+            title={view === 'weekly' ? 'Weekly Trend' : view === 'monthly' ? 'Monthly Trend' : 'Yearly Trend'}
             data={(() => {
+              if (view === 'weekly') {
+                if (history?.weekly && Array.isArray(history.weekly)) {
+                  const dataPoints = history.weekly.map((w: any) => ({
+                    month: `W${w.week} ${String(w.year).slice(-2)}`,
+                    emissions: Math.round(w.total || 0),
+                    average: Math.round((history.weekly.reduce((s: number, x: any) => s + (x.total || 0), 0) / (history.weekly.length || 1)) || 0),
+                  }));
+
+                  return dataPoints;
+                }
+
+                // fallback to single-result derived weekly average
+                return result
+                  ? Array.from({ length: 12 }).map((_, i) => ({
+                      month: `W${i + 1}`,
+                      emissions: Math.round((result.emissions.total || 0) / 52),
+                      average: Math.round((result.emissions.total || 0) / 52),
+                    }))
+                  : undefined;
+              }
+
               if (view === 'monthly') {
                 if (history?.monthly && Array.isArray(history.monthly)) {
                   const monthsNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -220,6 +251,7 @@ export default function Dashboard() {
               return undefined;
             })()}
           />
+          
         </div>
         <EmissionsChart
           data={

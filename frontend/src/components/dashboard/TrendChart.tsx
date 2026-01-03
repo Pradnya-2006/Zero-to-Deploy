@@ -27,11 +27,11 @@ const defaultData: MonthPoint[] = [
   { month: 'Dec', emissions: 240, average: 333 },
 ];
 
-export function TrendChart({ data = defaultData }: { data?: MonthPoint[] }) {
+export function TrendChart({ data = defaultData, title = 'Monthly Trend' }: { data?: MonthPoint[]; title?: string }) {
   return (
     <div className="dashboard-card">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-foreground">Monthly Trend</h3>
+        <h3 className="font-semibold text-foreground">{title}</h3>
         <div className="flex items-center gap-4 text-sm">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-primary" />

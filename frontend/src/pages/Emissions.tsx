@@ -21,10 +21,13 @@ import { cn } from '@/lib/utils';
 // initial empty shapes; actual values come from backend (/api/results/latest and /api/results/history)
 
 export default function Emissions() {
-  const [view, setView] = useState<'monthly' | 'yearly'>('monthly');
+  const [view, setView] = useState<'weekly' | 'monthly' | 'yearly'>('monthly');
   const [categoryData, setCategoryData] = useState<any[] | undefined>(undefined);
   const [monthlyData, setMonthlyData] = useState<any[] | undefined>(undefined);
   const [yearlyComparison, setYearlyComparison] = useState<any[] | undefined>(undefined);
+  const [weeklyData, setWeeklyData] = useState<any[] | undefined>(undefined);
+
+
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
   useEffect(() => {
@@ -53,6 +56,21 @@ export default function Emissions() {
           setCategoryData(cat);
         } else {
           setCategoryData(undefined);
+        }
+
+        // weekly data: use history.weekly if available (last 12 weeks)
+        if (historyJson?.weekly && Array.isArray(historyJson.weekly) && historyJson.weekly.length) {
+          const dataPoints = historyJson.weekly.map((w: any) => ({
+            weekLabel: `W${w.week} ${String(w.year).slice(-2)}`,
+            current: Math.round(w.total || 0),
+            previous: 0,
+          }));
+          setWeeklyData(dataPoints);
+        } else if (latest && latest.emissions) {
+          // fallback to 12 weeks derived from latest
+          setWeeklyData(Array.from({ length: 12 }).map((_, i) => ({ weekLabel: `W${i + 1}`, current: Math.round((latest.emissions.total || 0) / 12), previous: 0 })));
+        } else {
+          setWeeklyData(undefined);
         }
 
         // monthly data: use history.monthly if available else derive from latest
@@ -103,6 +121,13 @@ export default function Emissions() {
             size="sm"
           >
             Monthly
+          </Button>
+          <Button
+            variant={view === 'weekly' ? 'default' : 'outline'}
+            onClick={() => setView('weekly')}
+            size="sm"
+          >
+            Weekly
           </Button>
           <Button
             variant={view === 'yearly' ? 'default' : 'outline'}
@@ -232,14 +257,41 @@ export default function Emissions() {
         </div>
       </div>
 
-      {/* Comparison Chart */}
+      {/* Comparison Chart (weekly / monthly / yearly) */}
       <div className="dashboard-card">
         <h3 className="font-semibold text-foreground mb-4">
-          {view === 'monthly' ? 'Monthly Comparison (This Year vs Last Year)' : 'Yearly Trend'}
+          {view === 'weekly' ? 'Weekly Comparison (Last 12 weeks)' : view === 'monthly' ? 'Monthly Comparison (This Year vs Last Year)' : 'Yearly Trend'}
         </h3>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
-            {view === 'monthly' ? (
+            {view === 'weekly' ? (
+              <LineChart data={weeklyData ?? []}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis
+                  dataKey="weekLabel"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                  tickFormatter={(value) => `${value} kg`}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
+                    borderColor: 'hsl(var(--border))',
+                    borderRadius: '0.75rem',
+                  }}
+                  formatter={(value: number, name: string) => [`${value} kg CO₂`, name === 'current' ? 'This Period' : 'Previous']}
+                />
+                <Legend formatter={(value) => (value === 'current' ? 'This Period' : 'Previous')} />
+                <Line type="monotone" dataKey="previous" stroke="hsl(var(--muted-foreground))" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                <Line type="monotone" dataKey="current" stroke="hsl(160, 84%, 39%)" strokeWidth={3} dot={{ fill: 'hsl(160, 84%, 39%)', strokeWidth: 0, r: 4 }} activeDot={{ r: 6 }} />
+              </LineChart>
+            ) : view === 'monthly' ? (
               <LineChart data={monthlyData ?? []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis
@@ -260,30 +312,11 @@ export default function Emissions() {
                     borderColor: 'hsl(var(--border))',
                     borderRadius: '0.75rem',
                   }}
-                  formatter={(value: number, name: string) => [
-                    `${value} kg CO₂`,
-                    name === 'current' ? 'This Year' : 'Last Year',
-                  ]}
+                  formatter={(value: number, name: string) => [`${value} kg CO₂`, name === 'current' ? 'This Year' : 'Last Year']}
                 />
-                <Legend
-                  formatter={(value) => (value === 'current' ? 'This Year' : 'Last Year')}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="previous"
-                  stroke="hsl(var(--muted-foreground))"
-                  strokeWidth={2}
-                  strokeDasharray="5 5"
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="current"
-                  stroke="hsl(160, 84%, 39%)"
-                  strokeWidth={3}
-                  dot={{ fill: 'hsl(160, 84%, 39%)', strokeWidth: 0, r: 4 }}
-                  activeDot={{ r: 6 }}
-                />
+                <Legend formatter={(value) => (value === 'current' ? 'This Year' : 'Last Year')} />
+                <Line type="monotone" dataKey="previous" stroke="hsl(var(--muted-foreground))" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                <Line type="monotone" dataKey="current" stroke="hsl(160, 84%, 39%)" strokeWidth={3} dot={{ fill: 'hsl(160, 84%, 39%)', strokeWidth: 0, r: 4 }} activeDot={{ r: 6 }} />
               </LineChart>
             ) : (
               <BarChart data={yearlyComparison ?? []}>

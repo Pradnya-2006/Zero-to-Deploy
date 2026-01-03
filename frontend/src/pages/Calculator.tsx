@@ -386,6 +386,7 @@ export default function Calculator() {
 
   /* ---------------- ENERGY ---------------- */
   const [electricity, setElectricity] = useState([150]);
+  const [electricityUnit, setElectricityUnit] = useState<'monthly' | 'weekly'>('monthly');
   const [appliances, setAppliances] = useState({
     ac: true,
     heater: false,
@@ -424,8 +425,11 @@ export default function Calculator() {
       return;
     }
 
+    // convert electricity input to annual kWh before sending (backend expects annual)
+    const electricityAnnual = electricity[0] * (electricityUnit === 'monthly' ? 12 : 52);
+
     const payload = {
-      electricityKwh: electricity[0],
+      electricityKwh: electricityAnnual,
       appliances,
       transport: {
         mode: transportMode,
@@ -510,7 +514,13 @@ export default function Calculator() {
           {/* STEP 1 */}
           {currentStep === 1 && (
             <div className="space-y-6">
-              <Label>Monthly electricity usage (kWh)</Label>
+              <div className="flex items-center justify-between">
+                <Label>{electricityUnit === 'monthly' ? 'Monthly electricity usage (kWh)' : 'Weekly electricity usage (kWh)'}</Label>
+                <div className="flex gap-2">
+                  <Button variant={electricityUnit === 'monthly' ? 'default' : 'outline'} size="sm" onClick={() => setElectricityUnit('monthly')}>Monthly</Button>
+                  <Button variant={electricityUnit === 'weekly' ? 'default' : 'outline'} size="sm" onClick={() => setElectricityUnit('weekly')}>Weekly</Button>
+                </div>
+              </div>
               <Slider
                 value={electricity}
                 onValueChange={setElectricity}
@@ -518,7 +528,7 @@ export default function Calculator() {
                 max={600}
                 step={10}
               />
-              <span>{electricity[0]} kWh</span>
+              <span>{electricity[0]} kWh ({electricityUnit})</span>
             </div>
           )}
 
@@ -613,21 +623,22 @@ export default function Calculator() {
           {result && (
             <div className="space-y-4">
               <p className="text-center text-3xl font-bold">
-                {result.total} kg CO₂ / week
+                {Math.round(result.total)} kg CO₂ / year
+                <div className="text-sm text-muted-foreground">(~{Math.round(result.total / 52)} kg/week)</div>
               </p>
 
               <div className="text-sm space-y-1">
                 <div className="flex justify-between">
                   <span>Electricity</span>
-                  <span>{result.electricity}</span>
+                  <span>{Math.round(result.electricity)} kg CO₂ / year</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Transport</span>
-                  <span>{result.transport}</span>
+                  <span>{Math.round(result.transport)} kg CO₂ / year</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Lifestyle</span>
-                  <span>-{result.lifestyle}</span>
+                  <span>Lifestyle (reduction)</span>
+                  <span>-{Math.round(result.lifestyle)} kg CO₂ / year</span>
                 </div>
               </div>
 
