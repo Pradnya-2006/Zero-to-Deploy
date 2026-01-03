@@ -5,12 +5,16 @@ interface GoalProgressProps {
   currentValue: number;
   targetValue: number;
   unit?: string;
+  onClick?: () => void;
+  subtitle?: string;
 }
 
 export function GoalProgress({
-  currentValue = 3200,
-  targetValue = 4000,
+  currentValue = 0,
+  targetValue = 0,
   unit = 'kg CO₂',
+  onClick,
+  subtitle = 'Reduce to your goal targets',
 }: GoalProgressProps) {
   const isComplete = currentValue <= targetValue;
   // original intent: percentage reduced and a progress bar value, but clamp to 0-100
@@ -20,25 +24,25 @@ export function GoalProgress({
   const progressValue = Math.max(0, Math.min(100, rawProgress));
 
   return (
-    <div className="dashboard-card">
+    <div
+      role={onClick ? 'button' : undefined}
+      onClick={onClick}
+      className={onClick ? 'dashboard-card cursor-pointer' : 'dashboard-card'}
+    >
       <div className="flex items-center gap-3 mb-4">
         <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
           <Target className="w-5 h-5 text-primary" />
         </div>
         <div>
-          <h3 className="font-semibold text-foreground">Annual Goal Progress</h3>
-          <p className="text-sm text-muted-foreground">Reduce to 3,000 kg by year end</p>
+          <h3 className="font-semibold text-foreground">Your Progress from Goals</h3>
+          <p className="text-sm text-muted-foreground">{subtitle}</p>
         </div>
       </div>
 
       <div className="space-y-4">
         <div className="relative">
           <Progress value={Math.max(0, Math.min(100, 100 - progressValue))} className="h-4 bg-muted" />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-xs font-medium text-primary-foreground mix-blend-difference">
-              {isComplete ? 'Goal achieved' : `${percentage}% reduced`}
-            </span>
-          </div>
+          {/* removed centered percentage text per request */}
         </div>
 
         <div className="flex items-center justify-between text-sm">

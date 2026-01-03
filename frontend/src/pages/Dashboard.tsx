@@ -44,6 +44,7 @@ const recommendations = [
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const [goals, setGoals] = useState<any[]>([]);
   const [result, setResult] = useState<any | null>(null);
   const [history, setHistory] = useState<any | null>(null);
   const [view, setView] = useState<'weekly' | 'monthly' | 'yearly'>('monthly');
@@ -82,6 +83,24 @@ export default function Dashboard() {
     };
 
     fetchHistory();
+    // fetch goals for progress summary
+    const fetchGoals = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const headers: Record<string,string> = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch(`${API_URL}/api/goals`, { headers });
+        if (!res.ok) return setGoals([]);
+        const data = await res.json();
+        setGoals(data || []);
+      } catch (err) {
+        console.error('Failed to fetch goals', err);
+        setGoals([]);
+      }
+    };
+
+    fetchGoals();
   }, []);
 
   // derive yearly comparisons for top stats
@@ -268,7 +287,12 @@ export default function Dashboard() {
 
       {/* Goal & Recommendations */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <GoalProgress currentValue={3200} targetValue={4000} />
+        <GoalProgress
+          currentValue={Math.round((goals || []).reduce((s, g) => s + (g.currentValue || g.baselineKgCO2 || 0), 0))}
+          targetValue={Math.round((goals || []).reduce((s, g) => s + (g.targetKgCO2 || 0), 0))}
+          onClick={() => navigate('/goals')}
+          subtitle={goals.length ? `Reduce to ${Math.round((goals || []).reduce((s, g) => s + (g.targetKgCO2 || 0), 0))} kg by your goal dates` : 'Set goals to track progress'}
+        />
         <ImpactStats />
       </div>
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Target, TrendingDown, Award, Check, Plus } from 'lucide-react';
+import { Target, TrendingDown, Award, Check, Plus, Trash } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
@@ -24,6 +24,10 @@ interface Goal {
   current: number; // current value
   unit?: string;
   deadline?: string | null;
+  status?: 'active' | 'achieved' | 'missed';
+  progress?: number;
+  category?: string;
+  description?: string;
 }
 
 // milestones are derived from current aggregate progress below
@@ -37,16 +41,33 @@ export default function Goals() {
   const [newGoal, setNewGoal] = useState({
     title: '',
     target: [3000],
+    targetType: 'absolute',
     unit: 'kg CO₂',
-    deadline: '',
+    startDate: '',
+    endDate: '',
+    category: 'general',
+    description: '',
     current: '',
   });
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
   const handleAddGoal = async () => {
-    if (!newGoal.title || !newGoal.deadline) {
+    if (!newGoal.title || !newGoal.startDate || !newGoal.endDate) {
       toast({
         title: 'Missing information',
-        description: 'Please fill in all fields.',
+        description: 'Please fill in title, start and end dates.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // validation: current must be greater than target
+    const cur = Number(newGoal.current || 0);
+    const targ = Number(newGoal.target[0]);
+    if (!(cur > (newGoal.targetType === 'percentage' ? cur * (1 - Number(targ) / 100) : targ))) {
+      toast({
+        title: 'Invalid values',
+        description: 'Current value must be greater than target value.',
         variant: 'destructive',
       });
       return;
@@ -54,14 +75,14 @@ export default function Goals() {
 
     const payload: Record<string, any> = {
       title: newGoal.title,
-      targetKgCO2: Number(newGoal.target[0]),
-      deadline: newGoal.deadline,
+      targetValue: Number(newGoal.target[0]),
+      targetType: newGoal.targetType || 'absolute',
+      startDate: newGoal.startDate,
+      endDate: newGoal.endDate,
+      category: newGoal.category,
+      description: newGoal.description,
+      currentValue: Number(newGoal.current),
     };
-
-    // include optional currentValue if provided
-    if (newGoal.current !== '' && newGoal.current !== null && typeof newGoal.current !== 'undefined') {
-      payload.currentValue = Number(newGoal.current);
-    }
 
     try {
       const token = localStorage.getItem('token');
@@ -82,7 +103,7 @@ export default function Goals() {
       const saved = await res.json();
       // refetch goals to keep UI in sync with DB
       await fetchGoals();
-      setNewGoal({ title: '', target: [3000], unit: 'kg CO₂', deadline: '', current: '' });
+      setNewGoal({ title: '', target: [3000], targetType: 'absolute', unit: 'kg CO₂', deadline: '', category: 'general', description: '', current: '' });
       setIsDialogOpen(false);
 
       toast({
@@ -115,6 +136,9 @@ export default function Goals() {
         const currentVal = typeof g.currentValue !== 'undefined' && g.currentValue !== null
           ? Number(g.currentValue)
           : targetVal;
+        const progress = typeof g.progressPercent === 'number' ? Number(g.progressPercent) : Math.min(100, Math.round((currentVal / (targetVal || 1)) * 100));
+        const start = g.startDate ? new Date(g.startDate).toLocaleDateString() : '';
+        const end = g.endDate ? new Date(g.endDate).toLocaleDateString() : '';
 
         return {
           _id: g._id,
@@ -122,8 +146,13 @@ export default function Goals() {
           target: targetVal,
           current: currentVal,
           unit: 'kg CO₂',
-          deadline: g.deadline ? new Date(g.deadline).toLocaleDateString() : '',
-        } as Goal;
+          deadline: start && end ? `${start} — ${end}` : (g.endDate ? new Date(g.endDate).toLocaleDateString() : ''),
+          // attach progress for UI if needed
+          progress,
+          category: g.category || 'general',
+          description: g.description || '',
+          status: g.status || 'active',
+        } as any as Goal;
       });
       setGoals(mapped);
     } catch (err: any) {
@@ -186,28 +215,92 @@ export default function Goals() {
                 <label className="text-sm font-medium mb-2 block">
                   Target ({newGoal.unit})
                 </label>
-                <div className="flex items-center gap-4">
-                  <Slider
-                    value={newGoal.target}
-                    onValueChange={(value) => setNewGoal({ ...newGoal, target: value })}
-                    max={5000}
-                    min={100}
-                    step={100}
-                    className="flex-1"
+                <div className="flex items-center gap-4 mb-2">
+                  <button
+                    className={cn('px-2 py-1 rounded', newGoal.targetType === 'absolute' ? 'bg-primary text-white' : 'bg-muted/20')}
+                    onClick={() => setNewGoal({ ...newGoal, targetType: 'absolute' })}
+                  >Absolute</button>
+                  <button
+                    className={cn('px-2 py-1 rounded', newGoal.targetType === 'percentage' ? 'bg-primary text-white' : 'bg-muted/20')}
+                    onClick={() => setNewGoal({ ...newGoal, targetType: 'percentage' })}
+                  >Percentage</button>
+                </div>
+                {newGoal.targetType === 'absolute' ? (
+                  <div className="flex items-center gap-4">
+                    <Slider
+                      value={newGoal.target}
+                      onValueChange={(value) => setNewGoal({ ...newGoal, target: value })}
+                      max={5000}
+                      min={100}
+                      step={100}
+                      className="flex-1"
+                    />
+                    <span className="w-20 text-right font-semibold">{newGoal.target[0]}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-4">
+                    <Slider
+                      value={newGoal.target}
+                      onValueChange={(value) => setNewGoal({ ...newGoal, target: value })}
+                      max={100}
+                      min={1}
+                      step={1}
+                      className="flex-1"
+                    />
+                    <span className="w-20 text-right font-semibold">{newGoal.target[0]}%</span>
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Start Date</label>
+                  <Input
+                    type="date"
+                    min={(() => {
+                      const d = new Date();
+                      d.setDate(d.getDate() + 1);
+                      return d.toISOString().slice(0, 10);
+                    })()}
+                    value={newGoal.startDate}
+                    onChange={(e) => setNewGoal({ ...newGoal, startDate: e.target.value })}
                   />
-                  <span className="w-20 text-right font-semibold">{newGoal.target[0]}</span>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">End Date</label>
+                  <Input
+                    type="date"
+                    min={newGoal.startDate || (() => { const d = new Date(); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); })()}
+                    value={newGoal.endDate}
+                    onChange={(e) => setNewGoal({ ...newGoal, endDate: e.target.value })}
+                  />
                 </div>
               </div>
+
               <div>
-                <label className="text-sm font-medium mb-2 block">Deadline</label>
-                <Input
-                  placeholder="e.g., Dec 2024"
-                  value={newGoal.deadline}
-                  onChange={(e) => setNewGoal({ ...newGoal, deadline: e.target.value })}
+                <label className="text-sm font-medium mb-2 block">Category</label>
+                <select
+                  value={newGoal.category}
+                  onChange={(e) => setNewGoal({ ...newGoal, category: e.target.value })}
+                  className="w-full p-2 rounded border"
+                >
+                  <option value="general">General</option>
+                  <option value="electricity">Electricity</option>
+                  <option value="transport">Transport</option>
+                  <option value="lifestyle">Lifestyle</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-2 block">Description (optional)</label>
+                <textarea
+                  value={newGoal.description}
+                  onChange={(e) => setNewGoal({ ...newGoal, description: e.target.value })}
+                  className="w-full p-2 rounded border h-24"
+                  placeholder="Describe your goal or actions you'll take"
                 />
               </div>
               <div>
-                <label className="text-sm font-medium mb-2 block">Current value (optional)</label>
+                <label className="text-sm font-medium mb-2 block">Current value</label>
                 <Input
                   type="number"
                   placeholder="e.g., 3200"
@@ -239,7 +332,7 @@ export default function Goals() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Before */}
           <div className="text-center">
-            <p className="text-sm text-muted-foreground mb-2">Starting Footprint</p>
+            <p className="text-sm text-muted-foreground mb-2">Targeted Footprint</p>
             <p className="text-4xl font-bold text-foreground mb-1">{totalTarget.toLocaleString()}</p>
             <p className="text-sm text-muted-foreground">kg CO₂/year</p>
           </div>
@@ -289,8 +382,8 @@ export default function Goals() {
             {goals.map((goal) => {
               const targetValue = goal.target || 1;
               const currentValue = goal.current ?? 0;
-              const progressPercentage = Math.min(100, Math.round((currentValue / targetValue) * 100));
-              const isCompleted = currentValue >= targetValue;
+              const progressPercentage = typeof (goal as any).progress === 'number' ? (goal as any).progress : Math.min(100, Math.round(((targetValue - currentValue) / (targetValue || 1)) * 100));
+              const isCompleted = currentValue <= targetValue;
 
               return (
                 <div
@@ -302,15 +395,11 @@ export default function Goals() {
                       <h4 className="font-semibold text-foreground">{goal.title}</h4>
                       <p className="text-sm text-muted-foreground">{goal.deadline}</p>
                     </div>
-                    {isCompleted && (
-                      <div className="w-8 h-8 rounded-full bg-success flex items-center justify-center">
-                        <Check className="w-5 h-5 text-success-foreground" />
-                      </div>
-                    )}
+                    {/* removed duplicate header check - status badge and progress bar indicate completion */}
                   </div>
 
-                  <div className="space-y-3">
-                    <Progress value={progressPercentage} className={cn('h-3', isCompleted && '[&>div]:bg-success')} />
+                    <div className="space-y-3">
+                      <Progress value={goal.status === 'achieved' ? 100 : progressPercentage} className={cn('h-3', goal.status === 'achieved' ? '[&>div]:bg-success' : isCompleted && '[&>div]:bg-success')} />
 
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">
@@ -326,6 +415,69 @@ export default function Goals() {
                         <span className="font-medium text-primary">{Math.max(0, targetValue - currentValue)} kg CO₂</span> to go
                       </p>
                     )}
+
+                    <div className="pt-2 flex items-center gap-2">
+                      <span className={cn('text-xs font-medium px-2 py-1 rounded',
+                        goal.status === 'achieved' ? 'bg-green-100 text-green-800' : goal.status === 'missed' ? 'bg-yellow-100 text-yellow-800' : 'bg-muted/10 text-muted-foreground')}
+                      >{goal.status?.toUpperCase()}</span>
+
+                      <Button
+                        size="sm"
+                        disabled={goal.status !== 'active'}
+                        onClick={async () => {
+                          // optimistic UI update: mark achieved visually immediately
+                          setGoals((prev) => prev.map((pg) => (pg._id === goal._id ? { ...pg, status: 'achieved', progress: 100 } : pg)));
+                          try {
+                            const token = localStorage.getItem('token');
+                            const headers: Record<string,string> = { 'Content-Type': 'application/json' };
+                            if (token) headers['Authorization'] = `Bearer ${token}`;
+                            const res = await fetch(`${API_URL}/api/goals/${goal._id}/complete`, { method: 'PATCH', headers });
+                            if (!res.ok) {
+                              const errBody = await res.json().catch(() => ({}));
+                              throw new Error(errBody.message || 'Failed to mark complete');
+                            }
+                            // reconcile with server response
+                            const updated = await res.json().catch(() => null);
+                            if (updated && updated._id) {
+                              await fetchGoals();
+                              toast({ title: 'Goal updated', description: updated.status === 'achieved' ? 'Marked achieved' : 'Marked (may be missed)' });
+                            } else {
+                              await fetchGoals();
+                              toast({ title: 'Goal updated', description: 'Marked as completed.' });
+                            }
+                          } catch (err: any) {
+                            // revert optimistic change on error
+                            await fetchGoals();
+                            toast({ title: 'Error', description: err?.message || 'Could not update goal', variant: 'destructive' });
+                          }
+                        }}
+                      >Mark as Completed</Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          const ok = window.confirm('Delete this goal? This cannot be undone.');
+                          if (!ok) return;
+                          try {
+                            const token = localStorage.getItem('token');
+                            const headers: Record<string,string> = { 'Content-Type': 'application/json' };
+                            if (token) headers['Authorization'] = `Bearer ${token}`;
+                            const res = await fetch(`${API_URL}/api/goals/${goal._id}`, { method: 'DELETE', headers });
+                            if (!res.ok) {
+                              const errBody = await res.json().catch(() => ({}));
+                              throw new Error(errBody.message || 'Failed to delete goal');
+                            }
+                            await fetchGoals();
+                            toast({ title: 'Deleted', description: 'Goal removed.' });
+                          } catch (err: any) {
+                            toast({ title: 'Error', description: err?.message || 'Could not delete goal', variant: 'destructive' });
+                          }
+                        }}
+                      >
+                        <Trash className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               );

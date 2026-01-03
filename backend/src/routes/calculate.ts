@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import CarbonResult from '../models/CarbonResult';
 import { calculateFootprint } from '../services/calculateFootprint';
+import Goal from '../models/Goal';
 
 const router = express.Router();
 
@@ -20,6 +21,7 @@ router.post('/', async (req: Request, res: Response) => {
     });
 
     console.log('✅ Saved document ID:', saved._id);
+    // Do not auto-update goals here; goal updates are manual/tick-based per user request.
 
     //res.json({ emissions });
     res.status(200).json({
