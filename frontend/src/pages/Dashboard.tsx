@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import {
   Activity,
   TrendingDown,
@@ -42,6 +43,23 @@ const recommendations = [
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const [result, setResult] = useState<any | null>(null);
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+  useEffect(() => {
+    // fetch latest saved result
+    const fetchLatest = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/results/latest`);
+        const data = await res.json();
+        if (data?.found && data?.result) setResult(data.result);
+      } catch (err) {
+        console.error('Failed to fetch latest result', err);
+      }
+    };
+
+    fetchLatest();
+  }, []);
 
   return (
     <div className="page-container">
@@ -64,37 +82,43 @@ export default function Dashboard() {
         onAction={() => navigate('/recommendations')}
       />
 
+      {!result && (
+        <div className="dashboard-card my-6 text-center">
+          <p className="text-sm text-muted-foreground">No data available – calculate your footprint first.</p>
+        </div>
+      )}
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Footprint"
-          value="4,000"
+          value={result ? String(result.emissions.total) : '—'}
           subtitle="kg CO₂/year"
           icon={Activity}
-          trend={{ value: 12, isPositive: true }}
+          trend={{ value: 0, isPositive: true }}
           accentColor="primary"
         />
         <StatCard
           title="Monthly Average"
-          value="333"
+          value={result ? String(Math.round((result.emissions.total || 0) / 12)) : '—'}
           subtitle="kg CO₂"
           icon={TrendingDown}
-          trend={{ value: 8, isPositive: true }}
+          trend={{ value: 0, isPositive: true }}
           accentColor="success"
         />
         <StatCard
           title="Energy Usage"
-          value="1,800"
+          value={result ? String(result.emissions.electricity) : '—'}
           subtitle="kg CO₂/year"
           icon={Zap}
           accentColor="warning"
         />
         <StatCard
           title="This Month"
-          value="280"
+          value={result ? String(Math.round((result.emissions.total || 0) / 12)) : '—'}
           subtitle="kg CO₂"
           icon={Leaf}
-          trend={{ value: 15, isPositive: true }}
+          trend={{ value: 0, isPositive: true }}
           accentColor="success"
         />
       </div>
@@ -102,9 +126,29 @@ export default function Dashboard() {
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <TrendChart />
+          <TrendChart
+            data={
+              result
+                ? Array.from({ length: 12 }).map((_, i) => ({
+                    month: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i],
+                    emissions: Math.round((result.emissions.total || 0) / 12),
+                    average: Math.round((result.emissions.total || 0) / 12),
+                  }))
+                : undefined
+            }
+          />
         </div>
-        <EmissionsChart />
+        <EmissionsChart
+          data={
+            result
+              ? [
+                  { name: 'Energy', value: result.emissions.electricity, color: 'hsl(160, 84%, 39%)' },
+                  { name: 'Transport', value: result.emissions.transport, color: 'hsl(38, 92%, 50%)' },
+                  { name: 'Lifestyle', value: result.emissions.lifestyle, color: 'hsl(215, 16%, 47%)' },
+                ]
+              : undefined
+          }
+        />
       </div>
 
       {/* Goal & Recommendations */}

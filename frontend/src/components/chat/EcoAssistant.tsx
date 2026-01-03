@@ -14,7 +14,7 @@ interface Message {
 const initialMessages: Message[] = [
   {
     id: 1,
-    text: "Hi! 👋 I'm your Eco Assistant. I can help you understand your carbon footprint and suggest ways to reduce it. What would you like to know?",
+    text: "Hi! 👋 I'm your Eco Assistant powered by Gemini AI. I can help you understand your carbon footprint and suggest ways to reduce it. What would you like to know?",
     isBot: true,
     timestamp: new Date(),
   },
@@ -27,13 +27,7 @@ const suggestions = [
   "Explain carbon offsets",
 ];
 
-const botResponses: Record<string, string> = {
-  "reduce": "Based on your dashboard, your highest emissions come from electricity usage. Here are 3 quick wins:\n\n1. 💡 Switch to LED bulbs - saves 75% energy\n2. 🌡️ Adjust thermostat by 2°C - saves 10% on heating\n3. 🔌 Unplug devices when not in use\n\nWould you like more specific tips?",
-  "biggest": "Looking at your data, **electricity usage** accounts for 45% of your carbon footprint (1,800 kg CO₂/year). This is followed by transportation at 35% and lifestyle choices at 20%.\n\nWant me to suggest ways to reduce your electricity emissions?",
-  "energy": "Here are my top energy-saving tips:\n\n• Use natural light during the day\n• Wash clothes in cold water\n• Run dishwasher only when full\n• Enable power-saving mode on devices\n• Consider smart power strips\n\nThese changes can reduce your energy footprint by up to 25%!",
-  "offset": "Carbon offsets are credits that fund projects reducing CO₂ elsewhere (like planting trees or renewable energy). They help compensate for emissions you can't eliminate.\n\n**However**, reducing your actual footprint should always come first! Offsets are best used for unavoidable emissions like flights.\n\nWant to explore reduction strategies first?",
-  "default": "That's a great question! I'd recommend checking your Dashboard for personalized insights, or exploring the Recommendations page for actionable tips.\n\nIs there something specific about reducing your carbon footprint I can help with?",
-};
+const CHAT_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 export function EcoAssistant() {
   const [isOpen, setIsOpen] = useState(false);
@@ -50,26 +44,7 @@ export function EcoAssistant() {
     scrollToBottom();
   }, [messages]);
 
-  const getBotResponse = (userMessage: string): string => {
-    const lowerMessage = userMessage.toLowerCase();
-    
-    if (lowerMessage.includes('reduce') || lowerMessage.includes('lower') || lowerMessage.includes('decrease')) {
-      return botResponses.reduce;
-    }
-    if (lowerMessage.includes('biggest') || lowerMessage.includes('highest') || lowerMessage.includes('source')) {
-      return botResponses.biggest;
-    }
-    if (lowerMessage.includes('energy') || lowerMessage.includes('electricity') || lowerMessage.includes('power')) {
-      return botResponses.energy;
-    }
-    if (lowerMessage.includes('offset') || lowerMessage.includes('credit') || lowerMessage.includes('compensate')) {
-      return botResponses.offset;
-    }
-    
-    return botResponses.default;
-  };
-
-  const handleSend = (text: string = input) => {
+  const handleSend = async (text: string = input) => {
     if (!text.trim()) return;
 
     const userMessage: Message = {
@@ -83,17 +58,33 @@ export function EcoAssistant() {
     setInput('');
     setIsTyping(true);
 
-    // Simulate bot response delay
-    setTimeout(() => {
+    try {
+      const response = await fetch(`${CHAT_API_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text.trim() }),
+      });
+
+      const data = await response.json();
+
       const botMessage: Message = {
         id: Date.now() + 1,
-        text: getBotResponse(text),
+        text: data.reply || data.error || 'Sorry, I could not get a response.',
         isBot: true,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, botMessage]);
+    } catch (err) {
+      const botMessage: Message = {
+        id: Date.now() + 1,
+        text: 'Sorry, I could not connect to the server. Please try again later.',
+        isBot: true,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, botMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1000 + Math.random() * 500);
+    }
   };
 
   const handleSuggestionClick = (suggestion: string) => {

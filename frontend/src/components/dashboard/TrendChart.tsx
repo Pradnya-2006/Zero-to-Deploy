@@ -10,7 +10,9 @@ import {
   AreaChart,
 } from 'recharts';
 
-const data = [
+type MonthPoint = { month: string; emissions: number; average: number };
+
+const defaultData: MonthPoint[] = [
   { month: 'Jan', emissions: 380, average: 333 },
   { month: 'Feb', emissions: 350, average: 333 },
   { month: 'Mar', emissions: 340, average: 333 },
@@ -25,7 +27,7 @@ const data = [
   { month: 'Dec', emissions: 240, average: 333 },
 ];
 
-export function TrendChart() {
+export function TrendChart({ data = defaultData }: { data?: MonthPoint[] }) {
   return (
     <div className="dashboard-card">
       <div className="flex items-center justify-between mb-4">

@@ -7,13 +7,15 @@ import {
   Tooltip,
 } from 'recharts';
 
-const data = [
+type Item = { name: string; value: number; color: string };
+
+const defaultData: Item[] = [
   { name: 'Energy', value: 1800, color: 'hsl(160, 84%, 39%)' },
   { name: 'Transport', value: 1400, color: 'hsl(38, 92%, 50%)' },
   { name: 'Lifestyle', value: 800, color: 'hsl(215, 16%, 47%)' },
 ];
 
-export function EmissionsChart() {
+export function EmissionsChart({ data = defaultData }: { data?: Item[] }) {
   return (
     <div className="dashboard-card">
       <h3 className="font-semibold text-foreground mb-4">Emissions by Category</h3>

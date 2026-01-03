@@ -1,34 +1,97 @@
-<<<<<<< Updated upstream
-import express, { Request, Response } from "express";
+﻿import express, { Request, Response } from "express";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import cors from "cors";
 import dotenv from "dotenv";
-=======
-import express from 'express';
-import dotenv from 'dotenv';
-import cors from 'cors';
-
 import { connectDB } from './db/connectDB';
 import calculateRoute from './routes/calculate';
->>>>>>> Stashed changes
+import resultsRoute from './routes/results';
+import goalsRoute from './routes/goals';
 
 dotenv.config();
 
 const app = express();
-<<<<<<< Updated upstream
 app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET as string;
-const MONGO_URI = process.env.MONGO_URI as string;
+const MONGO_URI = process.env.MONGO_URI as string | undefined;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY as string | undefined;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
 /* MongoDB */
-mongoose.connect(MONGO_URI)
-  .then(() => console.log("MongoDB connected"))
-  .catch(err => console.error(err));
+if (!MONGO_URI) {
+  console.warn("MONGO_URI is not set. Skipping MongoDB connection.");
+} else {
+  connectDB();
+}
+
+/* Chat endpoint using Gemini / Generative Language API */
+app.post("/api/chat", async (req: Request, res: Response) => {
+  try {
+    const { message, messages } = req.body as { message?: string; messages?: Array<{ role: string; content: string }> };
+
+    if (!GEMINI_API_KEY) {
+      return res.status(500).json({ error: "GEMINI_API_KEY is not configured on the server." });
+    }
+
+    let contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+    
+    contents.push({
+      role: "user",
+      parts: [{ text: "You are an Eco Assistant helping users understand and reduce their carbon footprint. Be helpful, concise, and encouraging. Focus on practical sustainability tips." }]
+    });
+    contents.push({
+      role: "model", 
+      parts: [{ text: "Understood! I'm your Eco Assistant, ready to help you reduce your carbon footprint with practical and actionable advice." }]
+    });
+
+    if (Array.isArray(messages) && messages.length) {
+      messages.forEach((m) => {
+        contents.push({
+          role: m.role === "user" ? "user" : "model",
+          parts: [{ text: m.content }]
+        });
+      });
+    } else if (message) {
+      contents.push({ role: "user", parts: [{ text: message }] });
+    } else {
+      return res.status(400).json({ error: "No message provided" });
+    }
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+
+    const body = {
+      contents,
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 1024,
+      },
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const txt = await response.text();
+      console.error("Gemini API error:", txt);
+      return res.status(502).json({ error: "Upstream Gemini API error", details: txt });
+    }
+
+    const data = await response.json();
+    const assistantText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't generate a response.";
+
+    return res.json({ reply: assistantText });
+  } catch (err: any) {
+    console.error("/api/chat error", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
 
 /* User Schema */
 const UserSchema = new mongoose.Schema({
@@ -38,98 +101,6 @@ const UserSchema = new mongoose.Schema({
 });
 
 const User = mongoose.model("User", UserSchema);
-
-/* Goal Schema */
-const GoalSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  targetKgCO2: { type: Number, required: true },
-  currentValue: { type: Number },
-  deadline: { type: Date },
-  createdAt: { type: Date, default: Date.now },
-});
-
-const Goal = mongoose.model('Goal', GoalSchema);
-
-/* LIST GOALS */
-app.get('/api/goals', async (req: Request, res: Response) => {
-  try {
-    const docs = await Goal.find().sort({ createdAt: -1 }).lean();
-
-    const goals = docs.map((g: any) => ({
-      _id: g._id,
-      title: g.title,
-      targetKgCO2: g.targetKgCO2,
-      // provide a fallback currentValue if not stored in DB (default to target so new goals don't worsen progress immediately)
-      currentValue: typeof g.currentValue !== 'undefined' && g.currentValue !== null ? g.currentValue : g.targetKgCO2,
-      deadline: g.deadline,
-      createdAt: g.createdAt,
-    }));
-
-    res.json(goals);
-  } catch (err: any) {
-    console.error(err);
-    res.status(500).json({ message: err?.message || 'Server error' });
-  }
-});
-
-/* UPDATE GOAL (partial) */
-app.patch('/api/goals/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const update: any = {};
-    const { title, targetKgCO2, currentValue, deadline } = req.body;
-
-    if (typeof title !== 'undefined') update.title = title;
-    if (typeof targetKgCO2 !== 'undefined') update.targetKgCO2 = Number(targetKgCO2);
-    if (typeof currentValue !== 'undefined') update.currentValue = Number(currentValue);
-    if (typeof deadline !== 'undefined') {
-      const d = new Date(deadline);
-      if (!isNaN(d.getTime())) update.deadline = d;
-    }
-
-    const goal = await Goal.findByIdAndUpdate(id, update, { new: true }).lean();
-    if (!goal) return res.status(404).json({ message: 'Goal not found' });
-
-    res.json(goal);
-  } catch (err: any) {
-    console.error(err);
-    res.status(500).json({ message: err?.message || 'Server error' });
-  }
-});
-
-/* CREATE GOAL */
-app.post('/api/goals', async (req: Request, res: Response) => {
-  try {
-    const { title, targetKgCO2, deadline } = req.body;
-
-    if (!title || typeof targetKgCO2 === 'undefined') {
-      return res.status(400).json({ message: 'Missing required fields: title and targetKgCO2' });
-    }
-
-    const { currentValue } = req.body;
-
-    const goalData: any = {
-      title,
-      targetKgCO2: Number(targetKgCO2),
-    };
-
-    if (typeof currentValue !== 'undefined') {
-      goalData.currentValue = Number(currentValue);
-    }
-
-    if (deadline) {
-      const d = new Date(deadline);
-      if (!isNaN(d.getTime())) goalData.deadline = d;
-    }
-
-    const goal = await Goal.create(goalData);
-
-    res.status(201).json(goal);
-  } catch (err: any) {
-    console.error(err);
-    res.status(500).json({ message: err?.message || 'Server error' });
-  }
-});
 
 /* SIGNUP */
 app.post("/api/auth/signup", async (req: Request, res: Response) => {
@@ -182,27 +153,16 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
   });
 });
 
-
-=======
-
-/* middleware */
-app.use(cors());
-app.use(express.json());
-
-/* database */
-connectDB();
-
 /* routes */
 app.use('/api/calculate', calculateRoute);
+app.use('/api/results', resultsRoute);
+app.use('/api/goals', goalsRoute);
 
 /* health check */
 app.get('/ping', (_, res) => {
   res.send('pong');
 });
 
-/* server */
-const PORT = process.env.PORT || 5000;
->>>>>>> Stashed changes
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
