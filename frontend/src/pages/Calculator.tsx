@@ -7,8 +7,8 @@ import {
   ChevronRight,
   ChevronLeft,
   Check,
-  Info,
 } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
@@ -18,19 +18,44 @@ import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5000';
+
 const steps = [
-  { id: 1, title: 'Energy', icon: Zap, description: 'Home energy consumption' },
-  { id: 2, title: 'Transport', icon: Car, description: 'How you get around' },
-  { id: 3, title: 'Lifestyle', icon: Utensils, description: 'Daily habits and choices' },
+  { id: 1, title: 'Energy', icon: Zap },
+  { id: 2, title: 'Transport', icon: Car },
+  { id: 3, title: 'Lifestyle', icon: Utensils },
 ];
 
 export default function Calculator() {
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  /* ---------------- STEP STATE ---------------- */
   const [currentStep, setCurrentStep] = useState(1);
+<<<<<<< Updated upstream
   const [calculated, setCalculated] = useState(false);
   
   // Energy state
+=======
+
+  /* ---------------- RESULT STATE (FIX) ---------------- */
+  const [showResult, setShowResult] = useState(false);
+  const [result, setResult] = useState<{
+    electricity: number;
+    transport: number;
+    lifestyle: number;
+    total: number;
+  } | null>(null);
+
+  /* ---------------- ENERGY ---------------- */
+>>>>>>> Stashed changes
   const [electricity, setElectricity] = useState([150]);
   const [appliances, setAppliances] = useState({
     ac: true,
@@ -40,11 +65,16 @@ export default function Calculator() {
     dishwasher: false,
   });
 
-  // Transport state
-  const [transportMode, setTransportMode] = useState('car');
+  /* ---------------- TRANSPORT ---------------- */
+  const [transportMode, setTransportMode] =
+    useState<'car' | 'public' | 'bike' | 'walk'>('car');
+  const [carFuel, setCarFuel] =
+    useState<'petrol' | 'diesel' | 'ev'>('petrol');
+  const [publicType, setPublicType] =
+    useState<'bus' | 'metro' | 'train'>('bus');
   const [weeklyDistance, setWeeklyDistance] = useState([50]);
 
-  // Lifestyle state
+  /* ---------------- LIFESTYLE ---------------- */
   const [lifestyle, setLifestyle] = useState({
     vegetarian: false,
     localFood: false,
@@ -55,21 +85,10 @@ export default function Calculator() {
 
   const progressPercentage = (currentStep / steps.length) * 100;
 
-  const canProceed = () => {
-    switch (currentStep) {
-      case 1:
-        return electricity[0] > 0;
-      case 2:
-        return transportMode !== '';
-      case 3:
-        return true;
-      default:
-        return false;
-    }
-  };
-
+  /* ---------------- HANDLER ---------------- */
   const handleNext = () => {
     if (currentStep < steps.length) {
+<<<<<<< Updated upstream
       setCurrentStep(currentStep + 1);
     } else {
       // Calculate and save results
@@ -78,265 +97,181 @@ export default function Calculator() {
         description: 'Your carbon footprint has been calculated and saved.',
       });
       setCalculated(true);
+=======
+      setCurrentStep((s) => s + 1);
+      return;
+>>>>>>> Stashed changes
     }
-  };
 
-  const handleBack = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
+    const payload = {
+      electricityKwh: electricity[0],
+      appliances,
+      transport: {
+        mode: transportMode,
+        subtype: transportMode === 'car' ? carFuel : publicType,
+        weeklyDistanceKm: weeklyDistance[0],
+      },
+      lifestyle,
+    };
+
+    fetch(`${API_URL}/api/calculate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then(async (res) => {
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          throw new Error('Backend returned failure');
+        }
+
+        setResult(data.emissions);
+        setShowResult(true);
+      })
+      .catch((err) => {
+        console.error('❌ FRONTEND ERROR:', err);
+        toast({
+          title: 'Error',
+          description: 'Failed to calculate',
+        });
+      });
   };
 
   return (
-    <div className="page-container max-w-3xl mx-auto">
-      {/* Header */}
-      <div className="text-center mb-8">
-        <h1 className="page-title mb-2">Carbon Calculator</h1>
-        <p className="page-subtitle">
-          Answer a few questions to calculate your carbon footprint
-        </p>
-      </div>
-
-      {/* Progress */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-muted-foreground">
-            Step {currentStep} of {steps.length}
-          </span>
-          <span className="text-sm font-medium text-primary">
-            {Math.round(progressPercentage)}% complete
-          </span>
+    <>
+      <div className="page-container max-w-3xl mx-auto">
+        {/* HEADER */}
+        <div className="text-center mb-8">
+          <h1 className="page-title">Carbon Calculator</h1>
+          <p className="page-subtitle">Track and reduce your footprint</p>
         </div>
-        <Progress value={progressPercentage} className="h-2" />
-      </div>
 
-      {/* Step Indicators */}
-      <div className="flex items-center justify-center gap-4 mb-8">
-        {steps.map((step, index) => {
-          const StepIcon = step.icon;
-          const isActive = currentStep === step.id;
-          const isCompleted = currentStep > step.id;
+        {/* PROGRESS */}
+        <Progress value={progressPercentage} className="h-2 mb-8" />
 
-          return (
-            <div key={step.id} className="flex items-center">
+        {/* STEP INDICATORS */}
+        <div className="flex justify-center gap-4 mb-8">
+          {steps.map((step) => {
+            const Icon = step.icon;
+            const isActive = currentStep === step.id;
+            const isCompleted = currentStep > step.id;
+
+            return (
               <div
+                key={step.id}
                 className={cn(
-                  'w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300',
-                  isActive && 'gradient-emerald shadow-glow',
-                  isCompleted && 'bg-success',
-                  !isActive && !isCompleted && 'bg-muted'
+                  'w-12 h-12 rounded-xl flex items-center justify-center',
+                  isCompleted
+                    ? 'bg-success'
+                    : isActive
+                    ? 'gradient-emerald shadow-glow'
+                    : 'bg-muted'
                 )}
               >
                 {isCompleted ? (
-                  <Check className="w-6 h-6 text-success-foreground" />
+                  <Check className="text-success-foreground" />
                 ) : (
-                  <StepIcon
-                    className={cn(
-                      'w-6 h-6',
-                      isActive ? 'text-primary-foreground' : 'text-muted-foreground'
-                    )}
-                  />
+                  <Icon className="text-muted-foreground" />
                 )}
               </div>
-              {index < steps.length - 1 && (
-                <div
-                  className={cn(
-                    'w-16 h-0.5 mx-2',
-                    isCompleted ? 'bg-success' : 'bg-border'
-                  )}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Step Content */}
-      <div className="dashboard-card mb-8">
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold text-foreground mb-1">
-            {steps[currentStep - 1].title}
-          </h2>
-          <p className="text-muted-foreground">
-            {steps[currentStep - 1].description}
-          </p>
+            );
+          })}
         </div>
 
-        {/* Step 1: Energy */}
-        {currentStep === 1 && (
-          <div className="space-y-8 animate-fade-in">
-            <div>
-              <Label className="text-base font-medium mb-4 block">
-                Monthly electricity usage (kWh)
-              </Label>
-              <div className="flex items-center gap-4">
-                <Slider
-                  value={electricity}
-                  onValueChange={setElectricity}
-                  max={500}
-                  min={50}
-                  step={10}
-                  className="flex-1"
-                />
-                <span className="w-20 text-right font-semibold text-foreground">
-                  {electricity[0]} kWh
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground mt-2 flex items-center gap-1">
-                <Info className="w-4 h-4" />
-                Average household uses 150-200 kWh/month
-              </p>
-            </div>
+        {/* CONTENT */}
+        <div className="dashboard-card mb-8">
 
-            <div>
-              <Label className="text-base font-medium mb-4 block">
-                Which appliances do you use regularly?
-              </Label>
-              <div className="grid grid-cols-2 gap-4">
-                {Object.entries(appliances).map(([key, value]) => (
-                  <div
-                    key={key}
-                    className="flex items-center justify-between p-4 rounded-lg bg-muted/50"
-                  >
-                    <Label htmlFor={key} className="capitalize cursor-pointer">
-                      {key === 'ac' ? 'Air Conditioning' : key}
-                    </Label>
-                    <Switch
-                      id={key}
-                      checked={value}
-                      onCheckedChange={(checked) =>
-                        setAppliances((prev) => ({ ...prev, [key]: checked }))
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
+          {/* STEP 1 */}
+          {currentStep === 1 && (
+            <div className="space-y-6">
+              <Label>Monthly electricity usage (kWh)</Label>
+              <Slider
+                value={electricity}
+                onValueChange={setElectricity}
+                min={50}
+                max={600}
+                step={10}
+              />
+              <span>{electricity[0]} kWh</span>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Step 2: Transport */}
-        {currentStep === 2 && (
-          <div className="space-y-8 animate-fade-in">
-            <div>
-              <Label className="text-base font-medium mb-4 block">
-                Primary mode of transportation
-              </Label>
+          {/* STEP 2 */}
+          {currentStep === 2 && (
+            <div className="space-y-6">
+              <Label>Primary transport mode</Label>
               <RadioGroup
                 value={transportMode}
-                onValueChange={setTransportMode}
+                onValueChange={(v) => setTransportMode(v as any)}
                 className="grid grid-cols-2 gap-4"
               >
                 {[
-                  { value: 'car', label: 'Car', icon: '🚗' },
-                  { value: 'public', label: 'Public Transit', icon: '🚌' },
-                  { value: 'bike', label: 'Bicycle', icon: '🚲' },
-                  { value: 'walk', label: 'Walking', icon: '🚶' },
-                ].map((option) => (
-                  <div key={option.value}>
-                    <RadioGroupItem
-                      value={option.value}
-                      id={option.value}
-                      className="peer sr-only"
-                    />
+                  { value: 'car', label: 'Car 🚗' },
+                  { value: 'public', label: 'Public 🚌' },
+                  { value: 'bike', label: 'Bike 🚲' },
+                  { value: 'walk', label: 'Walk 🚶' },
+                ].map((m) => (
+                  <div key={m.value}>
+                    <RadioGroupItem value={m.value} id={m.value} className="sr-only peer" />
                     <Label
-                      htmlFor={option.value}
+                      htmlFor={m.value}
                       className={cn(
-                        'flex flex-col items-center p-4 rounded-xl border-2 cursor-pointer transition-all',
-                        transportMode === option.value
-                          ? 'border-primary bg-primary/5'
-                          : 'border-border hover:border-primary/50'
+                        'block text-center p-4 border rounded cursor-pointer',
+                        transportMode === m.value && 'border-primary bg-primary/10'
                       )}
                     >
-                      <span className="text-3xl mb-2">{option.icon}</span>
-                      <span className="font-medium">{option.label}</span>
+                      {m.label}
                     </Label>
                   </div>
                 ))}
               </RadioGroup>
             </div>
+          )}
 
-            {(transportMode === 'car' || transportMode === 'public') && (
-              <div>
-                <Label className="text-base font-medium mb-4 block">
-                  Weekly travel distance (km)
-                </Label>
-                <div className="flex items-center gap-4">
-                  <Slider
-                    value={weeklyDistance}
-                    onValueChange={setWeeklyDistance}
-                    max={300}
-                    min={0}
-                    step={5}
-                    className="flex-1"
-                  />
-                  <span className="w-20 text-right font-semibold text-foreground">
-                    {weeklyDistance[0]} km
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Step 3: Lifestyle */}
-        {currentStep === 3 && (
-          <div className="space-y-6 animate-fade-in">
-            <Label className="text-base font-medium mb-4 block">
-              Sustainable habits
-            </Label>
+          {/* STEP 3 */}
+          {currentStep === 3 && (
             <div className="space-y-4">
-              {[
-                { key: 'vegetarian', label: 'I follow a vegetarian/vegan diet', icon: '🥗' },
-                { key: 'localFood', label: 'I buy locally sourced food', icon: '🏪' },
-                { key: 'recycling', label: 'I recycle regularly', icon: '♻️' },
-                { key: 'composting', label: 'I compost food waste', icon: '🌱' },
-                { key: 'minimalPackaging', label: 'I avoid single-use plastics', icon: '🛍️' },
-              ].map((item) => (
+              {Object.entries(lifestyle).map(([key, value]) => (
                 <div
-                  key={item.key}
-                  className={cn(
-                    'flex items-center justify-between p-4 rounded-xl border-2 transition-all cursor-pointer',
-                    lifestyle[item.key as keyof typeof lifestyle]
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:border-primary/50'
-                  )}
+                  key={key}
+                  className="flex justify-between p-3 border rounded cursor-pointer"
                   onClick={() =>
-                    setLifestyle((prev) => ({
-                      ...prev,
-                      [item.key]: !prev[item.key as keyof typeof lifestyle],
-                    }))
+                    setLifestyle((p) => ({ ...p, [key]: !value }))
                   }
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">{item.icon}</span>
-                    <span className="font-medium">{item.label}</span>
-                  </div>
-                  <Switch
-                    checked={lifestyle[item.key as keyof typeof lifestyle]}
-                    onCheckedChange={(checked) =>
-                      setLifestyle((prev) => ({ ...prev, [item.key]: checked }))
-                    }
-                  />
+                  <span className="capitalize">{key}</span>
+                  <Switch checked={value} />
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
+
+        {/* NAVIGATION */}
+        <div className="flex justify-between">
+          <Button
+            variant="outline"
+            disabled={currentStep === 1}
+            onClick={() => setCurrentStep((s) => s - 1)}
+          >
+            <ChevronLeft /> Back
+          </Button>
+          <Button onClick={handleNext}>
+            {currentStep === steps.length ? 'Calculate' : 'Next'}
+            <ChevronRight />
+          </Button>
+        </div>
       </div>
 
-      {/* Navigation */}
-      <div className="flex items-center justify-between">
-        <Button
-          variant="outline"
-          onClick={handleBack}
-          disabled={currentStep === 1}
-          className="gap-2"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          Back
-        </Button>
+      {/* RESULT DIALOG */}
+      <Dialog open={showResult} onOpenChange={setShowResult}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Your Carbon Footprint</DialogTitle>
+          </DialogHeader>
 
+<<<<<<< Updated upstream
         <Button
           onClick={handleNext}
           disabled={!canProceed()}
@@ -356,5 +291,42 @@ export default function Calculator() {
         </div>
       )}
     </div>
+=======
+          {result && (
+            <div className="space-y-4">
+              <p className="text-center text-3xl font-bold">
+                {result.total} kg CO₂ / week
+              </p>
+
+              <div className="text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span>Electricity</span>
+                  <span>{result.electricity}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Transport</span>
+                  <span>{result.transport}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Lifestyle</span>
+                  <span>-{result.lifestyle}</span>
+                </div>
+              </div>
+
+              <Button
+                className="w-full"
+                onClick={() => {
+                  setShowResult(false);
+                  navigate('/dashboard');
+                }}
+              >
+                View Dashboard
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+>>>>>>> Stashed changes
   );
 }
