@@ -1,13 +1,23 @@
+<<<<<<< Updated upstream
 import express, { Request, Response } from "express";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import cors from "cors";
 import dotenv from "dotenv";
+=======
+import express from 'express';
+import dotenv from 'dotenv';
+import cors from 'cors';
+
+import { connectDB } from './db/connectDB';
+import calculateRoute from './routes/calculate';
+>>>>>>> Stashed changes
 
 dotenv.config();
 
 const app = express();
+<<<<<<< Updated upstream
 app.use(cors());
 app.use(express.json());
 
@@ -173,6 +183,26 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
 });
 
 
+=======
+
+/* middleware */
+app.use(cors());
+app.use(express.json());
+
+/* database */
+connectDB();
+
+/* routes */
+app.use('/api/calculate', calculateRoute);
+
+/* health check */
+app.get('/ping', (_, res) => {
+  res.send('pong');
+});
+
+/* server */
+const PORT = process.env.PORT || 5000;
+>>>>>>> Stashed changes
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
