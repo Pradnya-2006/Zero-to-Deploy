@@ -1,34 +1,44 @@
-# Zero-to-Deploy
-Ieee Hackathon Arcane
+# Zero-to-Deploy  
+### IEEE Hackathon – Arcane  
 
-🌱 EcoTrack – Carbon Footprint Tracking & Reduction Platform
+🌱 **EcoTrack – Carbon Footprint Tracking & Reduction Platform**
 
-EcoTrack is a full-stack web application designed to help users track, understand, and reduce their carbon footprint.
-It provides carbon calculations, goal tracking, progress visualization, and an AI-powered eco assistant to guide users toward sustainable choices.
+EcoTrack is a full-stack web application designed to help users **track, understand, and reduce their carbon footprint**.  
+It enables users to calculate emissions from daily activities, set reduction goals, visualize progress, and receive guidance through an AI-powered eco assistant.
 
-🚀 Key Features:-
-🔐 Authentication – Secure Sign Up & Login using JWT
-📊 Carbon Calculator – Calculate emissions from daily activities
-🎯 Goals & Progress – Set carbon reduction goals and track progress visually
-📈 Reports – Generate monthly carbon footprint reports
-🤖 Eco Assistant – Ask sustainability-related questions
-📬 Feedback System – Users can send feedback via email
-⚙️ Settings – Manage profile and preferences
+---
 
-🛠 Tech Stack:-
-Frontend -
-React + TypeScript
-Vite
-Tailwind CSS
-React Router
+## 🚀 Key Features
 
-Backend -
-Node.js
-Express.js
-MongoDB + Mongoose
-JWT Authentication
+- 🔐 **Authentication** – Secure Sign Up & Login using JWT  
+- 📊 **Carbon Calculator** – Calculate carbon emissions from daily activities  
+- 🎯 **Goals & Progress** – Set carbon reduction goals and track progress visually  
+- 📈 **Reports** – Generate monthly carbon footprint reports  
+- 🤖 **Eco Assistant** – Ask sustainability-related questions  
+- 📬 **Feedback System** – Users can send feedback via email  
+- ⚙️ **Settings** – Manage profile and user preferences  
 
-📁 Project Structure
+---
+
+## 🛠 Tech Stack
+
+### Frontend
+- React + TypeScript  
+- Vite  
+- Tailwind CSS  
+- React Router  
+
+### Backend
+- Node.js  
+- Express.js  
+- MongoDB with Mongoose  
+- JWT Authentication  
+
+---
+
+## 📁 Project Structure
+
+
 Zero-to-Deploy/
 │
 ├── frontend/        # React frontend
@@ -42,9 +52,12 @@ Zero-to-Deploy/
 │
 └── README.md
 
-▶️ How to Run This Project:-
+---
 
-1️. Clone the Repository
+## ▶️ How to Run This Project
+
+### 1. Clone the Repository
+```bash
 git clone https://github.com/Pradnya-2006/Zero-to-Deploy.git
 cd Zero-to-Deploy
 
